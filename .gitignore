@@ -1,0 +1,12 @@
+node_modules/
+.DS_Store
+*.log
+ios/Pods/
+ios/build/
+android/.gradle/
+android/app/build/
+*.jsbundle
+.bundle/
+.expo/
+.vscode/
+.idea/

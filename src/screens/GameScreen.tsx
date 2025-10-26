@@ -1,0 +1,1019 @@
+// src/screens/GameScreen.tsx
+import React, {useCallback, useEffect, useMemo, useState, useRef} from 'react';
+// Statically import all word lists so Metro/Expo + Hermes can bundle without `require`
+import answers2 from '../logic/words/answers-2';
+import allowed2 from '../logic/words/allowed-2';
+import answers3 from '../logic/words/answers-3';
+import allowed3 from '../logic/words/allowed-3';
+import answers4 from '../logic/words/answers-4';
+import allowed4 from '../logic/words/allowed-4';
+import answers5 from '../logic/words/answers-5';
+import allowed5 from '../logic/words/allowed-5';
+import answers6 from '../logic/words/answers-6';
+import allowed6 from '../logic/words/allowed-6';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  Modal,
+  AccessibilityInfo,
+  useWindowDimensions,
+  Animated,
+} from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import Haptic from 'react-native-haptic-feedback';
+import {evaluateGuess, TileState} from '../logic/evaluateGuess';
+import {selectDaily} from '../logic/selectDaily';
+import {getJSON, setJSON} from '../storage/mmkv';
+
+type Mode = 'daily' | 'free';
+type GameStatus = 'playing' | 'won' | 'lost';
+
+const LETTERS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM']; // simple keyboard
+
+export default function GameScreen() {
+  const insets = useSafeAreaInsets();
+  const [length, setLength] = useState<number>(getJSON('settings.length', 5));
+  const [maxRows, setMaxRows] = useState<number>(getJSON('settings.maxRows', 6));
+  const [mode, setMode] = useState<Mode>(getJSON('settings.mode', 'daily'));
+  const [dateISO, setDateISO] = useState<string>('');
+  const [answer, setAnswer] = useState<string>('');
+  const [rows, setRows] = useState<string[]>([]);
+  const [feedback, setFeedback] = useState<TileState[][]>([]);
+  const [current, setCurrent] = useState<string>('');
+  const [status, setStatus] = useState<GameStatus>('playing');
+  const [showResult, setShowResult] = useState(false);
+  // Only show the New Game sheet on true first launch
+  const firstLaunchRef = useRef(getJSON('app.hasLaunched', false) === false);
+  const [showSettings, setShowSettings] = useState(firstLaunchRef.current);
+  const [errorMsg, setErrorMsg] = useState<string>('');
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  // Only trigger a fresh game when settings are changed via the sheet
+  const [triggerNewFromSheet, setTriggerNewFromSheet] = useState<boolean>(false);
+
+  // Pending settings (for sheet)
+  const [pendingLength, setPendingLength] = useState<number>(length);
+  const [pendingMaxRows, setPendingMaxRows] = useState<number>(maxRows);
+  const [pendingMode, setPendingMode] = useState<Mode>(mode);
+
+  // Load wordlists per length (static require map to satisfy Metro)
+  const LISTS: Record<number, {answers: string[]; allowed: string[]}> = {
+    2: {answers: answers2 as string[], allowed: allowed2 as string[]},
+    3: {answers: answers3 as string[], allowed: allowed3 as string[]},
+    4: {answers: answers4 as string[], allowed: allowed4 as string[]},
+    5: {answers: answers5 as string[], allowed: allowed5 as string[]},
+    6: {answers: answers6 as string[], allowed: allowed6 as string[]},
+  };
+  const getLists = useCallback((len: number): {answers: string[]; allowed: string[]} => {
+    return LISTS[len] ?? LISTS[5];
+  }, []);
+
+  // Keep the same Promise-based API used elsewhere
+  const listsPromise = useMemo(() => Promise.resolve(getLists(length)), [getLists, length]);
+
+  const loadNew = useCallback(
+    async (seedDate?: string) => {
+      const {answers} = await listsPromise;
+      const dateISO = seedDate ?? new Date().toISOString().slice(0, 10);
+      const next =
+        mode === 'daily'
+          ? selectDaily(length, maxRows, dateISO, answers)
+          : answers[Math.floor(Math.random() * answers.length)];
+      setAnswer(next);
+      setDateISO(dateISO);
+      setRows([]);
+      setFeedback([]);
+      setCurrent('');
+      setStatus('playing');
+      setShowResult(false);
+      setJSON('session', {length, maxRows, mode, dateISO, answerHash: next}); // store hash in a real app
+    },
+    [listsPromise, length, maxRows, mode],
+  );
+
+  useEffect(() => {
+    setJSON('settings.length', length);
+    setJSON('settings.maxRows', maxRows);
+    setJSON('settings.mode', mode);
+    if (triggerNewFromSheet) {
+      loadNew();
+      setTriggerNewFromSheet(false);
+    }
+  }, [length, maxRows, mode, triggerNewFromSheet, loadNew]);
+
+  // Persist progress whenever key fields change
+  useEffect(() => {
+    const state = {
+      length,
+      maxRows,
+      mode,
+      dateISO,
+      answer,
+      rows,
+      feedback,
+      current,
+      status,
+    };
+    setJSON('game.state', state);
+  }, [length, maxRows, mode, dateISO, answer, rows, feedback, current, status]);
+
+  // One-time initialization: on first launch, enforce 5×6 defaults and do not
+  // restore any previous saved state. Otherwise, resume saved game if present.
+  // - if not first launch -> start a new game automatically
+  // - if first launch -> leave the New Game sheet open
+  useEffect(() => {
+    const init = async () => {
+      if (firstLaunchRef.current) {
+        // Enforce defaults for the initial experience
+        setLength(5);
+        setMaxRows(6);
+        setMode('daily');
+        setPendingLength(5);
+        setPendingMaxRows(6);
+        setPendingMode('daily');
+        // Do not restore saved progress or auto-start; user will press Start Game
+        return;
+      }
+      const saved: any = getJSON('game.state', null as any);
+      const today = new Date().toISOString().slice(0, 10);
+      if (saved && typeof saved === 'object') {
+        // If daily and date changed, roll to today's word
+        if (saved.mode === 'daily' && saved.dateISO && saved.dateISO !== today) {
+          setLength(saved.length ?? length);
+          setMaxRows(saved.maxRows ?? maxRows);
+          setMode(saved.mode ?? mode);
+          await loadNew(today);
+          return;
+        }
+
+        // Restore saved session
+        setLength(saved.length ?? length);
+        setMaxRows(saved.maxRows ?? maxRows);
+        setMode(saved.mode ?? mode);
+        setDateISO(saved.dateISO ?? today);
+        setAnswer(saved.answer ?? '');
+        setRows(Array.isArray(saved.rows) ? saved.rows : []);
+        setFeedback(Array.isArray(saved.feedback) ? saved.feedback : []);
+        setCurrent(typeof saved.current === 'string' ? saved.current : '');
+        setStatus(saved.status === 'won' || saved.status === 'lost' ? saved.status : 'playing');
+        // If game already ended, keep result modal visible for clarity
+        if (saved.status === 'won' || saved.status === 'lost') setShowResult(true);
+        // Do not auto-close the New Game sheet here; it may be closed by default unless firstLaunch
+        return;
+      }
+
+      // No saved game: if not first launch, auto-start a new game
+      const hasLaunched = getJSON('app.hasLaunched', false);
+      if (hasLaunched) {
+        await loadNew(today);
+      }
+    };
+    // Fire and forget (loadNew is async already)
+    init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const showError = useCallback((msg: string) => {
+    setErrorMsg(msg);
+    Haptic.trigger('notificationError');
+    AccessibilityInfo.announceForAccessibility?.(msg);
+
+    // Shake animation
+    Animated.sequence([
+      Animated.timing(shakeAnim, {toValue: 10, duration: 50, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: -10, duration: 50, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: 10, duration: 50, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: 0, duration: 50, useNativeDriver: true}),
+    ]).start();
+
+    setTimeout(() => setErrorMsg(''), 2000);
+  }, [shakeAnim]);
+
+  const commitGuess = useCallback(async () => {
+    if (status !== 'playing') return;
+    if (current.length !== length) {
+      showError('Not enough letters');
+      return;
+    }
+    const {allowed} = await listsPromise;
+    if (!allowed.includes(current.toLowerCase())) {
+      showError('Not in word list');
+      return;
+    }
+    const fb = evaluateGuess(answer, current.toLowerCase());
+    setRows(r => [...r, current.toUpperCase()]);
+    setFeedback(f => [...f, fb]);
+    setCurrent('');
+    Haptic.trigger('impactMedium');
+
+    const won = fb.every(s => s === 'correct');
+    if (won) {
+      setStatus('won');
+      setShowResult(true);
+      Haptic.trigger('notificationSuccess');
+      AccessibilityInfo.announceForAccessibility?.('You win!');
+    } else if (rows.length + 1 >= maxRows) {
+      setStatus('lost');
+      setShowResult(true);
+      Haptic.trigger('notificationWarning');
+      AccessibilityInfo.announceForAccessibility?.(
+        `You lose. The word was ${answer.toUpperCase()}`,
+      );
+    }
+  }, [answer, current, length, listsPromise, rows.length, status, showError, maxRows]);
+
+  // Keyboard handlers
+  const onKey = useCallback(
+    (k: string) => {
+      if (status !== 'playing') return;
+      if (k === 'ENTER') commitGuess();
+      else if (k === 'DEL') setCurrent(c => c.slice(0, -1));
+      else if (/^[A-Z]$/.test(k) && current.length < length)
+        setCurrent(c => (c + k).toUpperCase());
+    },
+    [commitGuess, current.length, length, status],
+  );
+
+  const keyStates = useMemo(() => {
+    const map = new Map<string, TileState>();
+    feedback.forEach((fb, rowIdx) => {
+      const word = rows[rowIdx] ?? '';
+      for (let i = 0; i < fb.length; i++) {
+        const ch = word[i];
+        const prev = map.get(ch);
+        const next = fb[i];
+        const rank = {absent: 0, present: 1, correct: 2};
+        if (!prev || rank[next] > rank[prev]) map.set(ch, next);
+      }
+    });
+    return map;
+  }, [feedback, rows]);
+
+  const handleNewGame = useCallback(() => {
+    setPendingLength(length);
+    setPendingMaxRows(maxRows);
+    setPendingMode(mode);
+    setShowSettings(true);
+  }, [length, maxRows, mode]);
+
+  const handleStartGame = useCallback(() => {
+    setLength(pendingLength);
+    setMaxRows(pendingMaxRows);
+    setMode(pendingMode);
+    setShowSettings(false);
+    setTriggerNewFromSheet(true);
+    setJSON('app.hasLaunched', true);
+  }, [pendingLength, pendingMaxRows, pendingMode]);
+
+  const gameInProgress = rows.length > 0 && status === 'playing';
+
+  const formattedDate = useMemo(() => {
+    if (!dateISO || mode !== 'daily') return '';
+    const d = new Date(dateISO + 'T00:00:00');
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[d.getMonth()]} ${d.getDate()}`;
+  }, [dateISO, mode]);
+
+  return (
+    <View
+      style={[
+        styles.container,
+        {paddingTop: insets.top, paddingBottom: insets.bottom},
+      ]}>
+      {/* Controls */}
+      <View style={styles.controls}>
+        <View style={styles.configBadge}>
+          <Text style={styles.configSize}>
+            {length}×{maxRows}
+          </Text>
+          {mode === 'daily' && formattedDate && (
+            <>
+              <View style={styles.configDivider} />
+              <Text style={styles.configDate}>{formattedDate}</Text>
+            </>
+          )}
+        </View>
+        <Pressable style={styles.newBtn} onPress={handleNewGame}>
+          <Text style={styles.newBtnText}>New Game</Text>
+        </Pressable>
+      </View>
+
+      {/* Error message */}
+      {errorMsg ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{errorMsg}</Text>
+        </View>
+      ) : null}
+
+      {/* Board */}
+      <Animated.View style={{flex: 1, transform: [{translateX: shakeAnim}]}}>
+        <Board
+          length={length}
+          rows={rows}
+          feedback={feedback}
+          current={current}
+          maxRows={maxRows}
+        />
+      </Animated.View>
+
+      {/* Keyboard */}
+      <Keyboard onKey={onKey} keyStates={keyStates} />
+
+      {/* Settings sheet */}
+      <Modal transparent visible={showSettings} animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <Pressable
+            style={styles.backdropPress}
+            onPress={() => setShowSettings(false)}
+          />
+          <View style={styles.settingsSheet}>
+            {/* Header */}
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Start New Game</Text>
+              <Text style={styles.sheetDescription}>Configure your game settings below</Text>
+              {gameInProgress && (
+                <View style={styles.warningBadge}>
+                  <Text style={styles.warningBadgeText}>⚠️ Current progress will be lost</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Content */}
+            <View style={styles.sheetContent}>
+              <View style={styles.settingGroup}>
+                <Text style={styles.settingLabel}>Word Length</Text>
+                <Segment
+                  value={pendingLength}
+                  onChange={setPendingLength}
+                  options={[2, 3, 4, 5, 6]}
+                />
+              </View>
+
+              <View style={styles.settingGroup}>
+                <Text style={styles.settingLabel}>Maximum Guesses</Text>
+                <Segment
+                  value={pendingMaxRows}
+                  onChange={setPendingMaxRows}
+                  options={[4, 5, 6, 7, 8]}
+                />
+              </View>
+
+              <View style={styles.settingGroup}>
+                <Text style={styles.settingLabel}>Game Mode</Text>
+                <Text style={styles.settingHint}>Choose between daily puzzle or random word</Text>
+                <View style={styles.radioGroup}>
+                  <RadioCard
+                    icon="📅"
+                    label="Daily Challenge"
+                    description="Same puzzle for everyone today"
+                    selected={pendingMode === 'daily'}
+                    onPress={() => setPendingMode('daily')}
+                  />
+                  <RadioCard
+                    icon="🎲"
+                    label="Free Play"
+                    description="Random word, play unlimited"
+                    selected={pendingMode === 'free'}
+                    onPress={() => setPendingMode('free')}
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* Footer */}
+            <View style={styles.sheetFooter}>
+              <Pressable
+                style={styles.cancelBtn}
+                onPress={() => setShowSettings(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.startBtn} onPress={handleStartGame}>
+                <Text style={styles.startBtnText}>Start Game</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Result modal */}
+      <Modal transparent visible={showResult} animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.resultTitle}>
+              {status === 'won'
+                ? 'You Win!'
+                : `The word was ${answer.toUpperCase()}`}
+            </Text>
+            <Pressable
+              style={styles.primary}
+              onPress={() => {
+                setShowResult(false);
+                handleNewGame();
+              }}>
+              <Text style={styles.primaryText}>Play again</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+/** UI bits (kept here to stay single-screen). Memoize to reduce re-renders. */
+const RadioCard = React.memo(
+  ({
+    icon,
+    label,
+    description,
+    selected,
+    onPress,
+  }: {
+    icon: string;
+    label: string;
+    description: string;
+    selected: boolean;
+    onPress: () => void;
+  }) => (
+    <Pressable
+      style={[
+        styles.radioCard,
+        selected && styles.radioCardSelected,
+      ]}
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{checked: selected}}>
+      <View style={[
+        styles.radioCircle,
+        selected && styles.radioCircleSelected,
+      ]}>
+        {selected && <View style={styles.radioCircleInner} />}
+      </View>
+      <View style={styles.radioContent}>
+        <Text style={styles.radioIcon}>{icon}</Text>
+        <View style={styles.radioTextContent}>
+          <Text style={[
+            styles.radioLabel,
+            selected && styles.radioLabelSelected,
+          ]}>{label}</Text>
+          <Text style={[
+            styles.radioDescription,
+            selected && styles.radioDescriptionSelected,
+          ]}>{description}</Text>
+        </View>
+      </View>
+    </Pressable>
+  ),
+);
+
+const Segment = React.memo(
+  ({
+    value,
+    onChange,
+    options,
+  }: {
+    value: number;
+    onChange: (v: number) => void;
+    options?: number[];
+  }) => {
+    const opts = options ?? [2, 3, 4, 5, 6];
+    return (
+      <View style={styles.segment}>
+        {opts.map(n => (
+          <Pressable
+            key={n}
+            onPress={() => onChange(n)}
+            style={[
+              styles.segmentItem,
+              value === n && styles.segmentItemActive,
+            ]}
+            accessibilityRole="button"
+            accessibilityState={{selected: value === n}}>
+            <Text
+              style={[
+                styles.segmentText,
+                value === n && styles.segmentTextActive,
+              ]}>
+              {n}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    );
+  },
+);
+
+const Board = React.memo(
+  ({
+    length,
+    rows,
+    feedback,
+    current,
+    maxRows,
+  }: {
+    length: number;
+    rows: string[];
+    feedback: TileState[][];
+    current: string;
+    maxRows: number;
+  }) => {
+    const {width} = useWindowDimensions();
+    const gap = 8;
+    const maxTileSize = 62;
+    const padding = 24;
+    const availableWidth = width - padding * 2;
+    const calculatedSize = Math.min(
+      maxTileSize,
+      Math.floor((availableWidth - gap * (length - 1)) / length),
+    );
+    const tileSize = {width: calculatedSize, height: calculatedSize * 1.12};
+
+    const allRows = [...rows];
+    const activeRow = rows.length < maxRows ? rows.length : -1;
+    if (rows.length < maxRows) allRows.push(current.padEnd(length, ' '));
+    while (allRows.length < maxRows) allRows.push(''.padEnd(length, ' '));
+    return (
+      <View style={styles.board}>
+        {allRows.map((word, rIdx) => (
+          <View key={rIdx} style={styles.row}>
+            {Array.from({length}).map((_, cIdx) => {
+              const ch = word[cIdx] ?? ' ';
+              const state = feedback[rIdx]?.[cIdx] ?? 'empty';
+              const isActive = rIdx === activeRow && ch !== ' ';
+              return (
+                <Tile
+                  key={cIdx}
+                  ch={ch}
+                  state={state as any}
+                  isActive={isActive}
+                  size={tileSize}
+                />
+              );
+            })}
+          </View>
+        ))}
+      </View>
+    );
+  },
+);
+
+const Tile = React.memo(
+  ({
+    ch,
+    state,
+    isActive,
+    size,
+  }: {
+    ch: string;
+    state: TileState | 'empty';
+    isActive?: boolean;
+    size?: {width: number; height: number};
+  }) => {
+    const fontSize = size ? Math.floor(size.width * 0.54) : 28;
+    return (
+      <View
+        style={[
+          styles.tile,
+          size,
+          state === 'correct' && styles.tCorrect,
+          state === 'present' && styles.tPresent,
+          state === 'absent' && styles.tAbsent,
+          isActive && styles.tileActive,
+        ]}>
+        <Text
+          style={[styles.tileText, {fontSize}]}
+          accessible
+          accessibilityLabel={`${ch || 'blank'} ${state !== 'empty' ? state : ''}`}
+          accessibilityRole="text">
+          {ch !== ' ' ? ch : ''}
+        </Text>
+      </View>
+    );
+  },
+);
+
+const Keyboard = React.memo(
+  ({
+    onKey,
+    keyStates,
+  }: {
+    onKey: (k: string) => void;
+    keyStates: Map<string, TileState>;
+  }) => {
+    return (
+      <View style={styles.kb}>
+        {LETTERS.map((row, idx) => (
+          <View key={idx} style={styles.kbRow}>
+            {idx === 2 && (
+              <Key label="↵" flex={2} onPress={() => onKey('ENTER')} isAction accessibilityLabel="Enter" />
+            )}
+            {row.split('').map(k => {
+              const st = keyStates.get(k);
+              return <Key key={k} label={k} state={st} onPress={() => onKey(k)} />;
+            })}
+            {idx === 2 && (
+              <Key label="⌫" flex={2} onPress={() => onKey('DEL')} isAction accessibilityLabel="Delete" />
+            )}
+          </View>
+        ))}
+      </View>
+    );
+  },
+);
+
+const Key = React.memo(
+  ({
+    label,
+    onPress,
+    state,
+    flex,
+    isAction,
+    accessibilityLabel,
+  }: {
+    label: string;
+    onPress: () => void;
+    state?: TileState;
+    flex?: number;
+    isAction?: boolean;
+    accessibilityLabel?: string;
+  }) => (
+    <Pressable
+      onPress={onPress}
+      style={({pressed}) => [
+        styles.key,
+        {flex: flex ?? 1},
+        state === 'correct' && styles.kCorrect,
+        state === 'present' && styles.kPresent,
+        state === 'absent' && styles.kAbsent,
+        isAction && styles.keyAction,
+        pressed && styles.keyPressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel || label}>
+      <Text
+        style={[
+          styles.keyText,
+          isAction && styles.keyTextAction,
+        ]}>
+        {label}
+      </Text>
+    </Pressable>
+  ),
+);
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#111',
+    paddingHorizontal: 12,
+  },
+  controls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 4,
+  },
+  configBadge: {
+    backgroundColor: '#18181b',
+    borderWidth: 1,
+    borderColor: '#27272a',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  configSize: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#e4e4e7',
+  },
+  configDivider: {
+    width: 1,
+    height: 14,
+    backgroundColor: '#3f3f46',
+  },
+  configDate: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#71717a',
+  },
+  errorContainer: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    minHeight: 40,
+    backgroundColor: '#2c1f1f',
+    borderRadius: 8,
+    marginHorizontal: 20,
+  },
+  errorText: {
+    color: '#ff453a',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  segment: {
+    flexDirection: 'row',
+    backgroundColor: '#18181b',
+    borderColor: '#27272a',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 3,
+    gap: 2,
+  },
+  segmentItem: {
+    flex: 1,
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  segmentItemActive: {
+    backgroundColor: '#27272a',
+    borderColor: '#3f3f46',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  segmentText: {color: '#a1a1aa', fontWeight: '500', fontSize: 14, textAlign: 'center'},
+  segmentTextActive: {color: '#fafafa', fontWeight: '500'},
+  newBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#0a84ff',
+  },
+  newBtnText: {color: '#fff', fontWeight: '700', fontSize: 14},
+
+  board: {flex: 1, justifyContent: 'center', gap: 8, paddingVertical: 12},
+  row: {flexDirection: 'row', gap: 8, alignSelf: 'center'},
+  tile: {
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1c1c1e',
+  },
+  tileActive: {
+    borderColor: '#0a84ff',
+    borderWidth: 3,
+    transform: [{scale: 1.03}],
+  },
+  tileText: {
+    color: '#fff',
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  tCorrect: {backgroundColor: '#30d158', borderColor: '#30d158'},
+  tPresent: {backgroundColor: '#ffcc00', borderColor: '#ffcc00'},
+  tAbsent: {backgroundColor: '#48484a', borderColor: '#48484a'},
+
+  kb: {gap: 8, marginBottom: 12, paddingHorizontal: 2},
+  kbRow: {flexDirection: 'row', gap: 6, justifyContent: 'center'},
+  key: {
+    minWidth: 32,
+    height: 48,
+    borderRadius: 6,
+    backgroundColor: '#686868',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  keyPressed: {
+    backgroundColor: '#8e8e93',
+    transform: [{scale: 0.94}],
+  },
+  keyAction: {
+    backgroundColor: '#505052',
+  },
+  keyText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  keyTextAction: {
+    fontSize: 24,
+    fontWeight: '400',
+    textTransform: 'none',
+  },
+  kCorrect: {backgroundColor: '#30d158'},
+  kPresent: {backgroundColor: '#ffcc00'},
+  kAbsent: {backgroundColor: '#48484a'},
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backdropPress: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  settingsSheet: {
+    width: '90%',
+    maxWidth: 420,
+    backgroundColor: '#09090b',
+    borderColor: '#27272a',
+    borderWidth: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 25},
+    shadowOpacity: 0.5,
+    shadowRadius: 50,
+    elevation: 24,
+  },
+  sheetHeader: {
+    paddingTop: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#27272a',
+  },
+  sheetTitle: {
+    color: '#fafafa',
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 4,
+    letterSpacing: -0.2,
+  },
+  sheetDescription: {
+    color: '#a1a1aa',
+    fontSize: 14,
+    fontWeight: '400',
+    lineHeight: 20,
+  },
+  warningBadge: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+    borderColor: 'rgba(251, 191, 36, 0.2)',
+    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+  },
+  warningBadgeText: {
+    color: '#fbbf24',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  sheetContent: {
+    padding: 24,
+    gap: 24,
+  },
+  settingGroup: {
+    gap: 12,
+  },
+  settingLabel: {
+    color: '#fafafa',
+    fontSize: 14,
+    fontWeight: '500',
+    letterSpacing: -0.2,
+  },
+  settingHint: {
+    color: '#71717a',
+    fontSize: 13,
+    fontWeight: '400',
+    marginTop: -8,
+  },
+  radioGroup: {
+    gap: 10,
+  },
+  radioCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    backgroundColor: '#18181b',
+    borderColor: '#27272a',
+    borderWidth: 1.5,
+    borderRadius: 8,
+  },
+  radioCardSelected: {
+    borderColor: '#3b82f6',
+    backgroundColor: 'rgba(59, 130, 246, 0.05)',
+  },
+  radioCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#52525b',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioCircleSelected: {
+    borderColor: '#3b82f6',
+    backgroundColor: '#3b82f6',
+  },
+  radioCircleInner: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#fff',
+  },
+  radioContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  radioIcon: {
+    fontSize: 22,
+  },
+  radioTextContent: {
+    flex: 1,
+  },
+  radioLabel: {
+    color: '#fafafa',
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  radioLabelSelected: {
+    color: '#fafafa',
+  },
+  radioDescription: {
+    color: '#71717a',
+    fontSize: 13,
+    fontWeight: '400',
+  },
+  radioDescriptionSelected: {
+    color: '#a1a1aa',
+  },
+  sheetFooter: {
+    flexDirection: 'row',
+    gap: 10,
+    padding: 16,
+    paddingHorizontal: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#27272a',
+    backgroundColor: '#0a0a0b',
+  },
+  cancelBtn: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderColor: '#27272a',
+    borderWidth: 1.5,
+    paddingVertical: 11,
+    borderRadius: 7,
+    alignItems: 'center',
+  },
+  cancelBtnText: {
+    color: '#fafafa',
+    fontSize: 14,
+    fontWeight: '500',
+    letterSpacing: -0.2,
+  },
+  startBtn: {
+    flex: 1,
+    backgroundColor: '#3b82f6',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    paddingVertical: 11,
+    borderRadius: 7,
+    alignItems: 'center',
+  },
+  startBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+    letterSpacing: -0.2,
+  },
+  modalCard: {
+    width: '80%',
+    backgroundColor: '#1c1c1e',
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 8},
+    shadowOpacity: 0.44,
+    shadowRadius: 10,
+    elevation: 16,
+  },
+  resultTitle: {color: '#fff', fontSize: 20, fontWeight: '800'},
+  primary: {
+    backgroundColor: '#0a84ff',
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+  },
+  primaryText: {color: '#fff', fontWeight: '800'},
+});
