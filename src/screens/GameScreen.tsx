@@ -20,12 +20,27 @@ import {
   AccessibilityInfo,
   useWindowDimensions,
   Animated,
+  Share,
+  ScrollView,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Haptic from 'react-native-haptic-feedback';
 import {evaluateGuess, TileState} from '../logic/evaluateGuess';
 import {selectDaily} from '../logic/selectDaily';
 import {getJSON, setJSON} from '../storage/mmkv';
+import {
+  getProfile,
+  recordGameResult,
+  getStatsForLength,
+  getWinRate,
+  markWordAsUsed,
+  getUnusedWords,
+} from '../storage/profile';
+import {
+  generateShareText,
+  getResultEmoji,
+  getResultTitle,
+} from '../logic/shareResult';
 
 type Mode = 'daily' | 'free';
 type GameStatus = 'playing' | 'won' | 'lost';
@@ -76,10 +91,21 @@ export default function GameScreen() {
     async (seedDate?: string) => {
       const {answers} = await listsPromise;
       const dateISO = seedDate ?? new Date().toISOString().slice(0, 10);
+
+      // Get unused words for this length
+      const unusedWords = getUnusedWords(length, answers);
+
+      // If all words have been used, use the full list (cycle resets automatically)
+      const availableWords = unusedWords.length > 0 ? unusedWords : answers;
+
       const next =
         mode === 'daily'
-          ? selectDaily(length, maxRows, dateISO, answers)
-          : answers[Math.floor(Math.random() * answers.length)];
+          ? selectDaily(length, maxRows, dateISO, availableWords)
+          : availableWords[Math.floor(Math.random() * availableWords.length)];
+
+      // Mark word as used
+      markWordAsUsed(length, next, answers.length);
+
       setAnswer(next);
       setDateISO(dateISO);
       setRows([]);
@@ -196,6 +222,11 @@ export default function GameScreen() {
       showError('Not enough letters');
       return;
     }
+    // Guard against empty answer
+    if (!answer || answer.length === 0) {
+      showError('Game not ready');
+      return;
+    }
     const {allowed} = await listsPromise;
     if (!allowed.includes(current.toLowerCase())) {
       showError('Not in word list');
@@ -213,6 +244,15 @@ export default function GameScreen() {
       setShowResult(true);
       Haptic.trigger('notificationSuccess');
       AccessibilityInfo.announceForAccessibility?.('You win!');
+
+      // Record win stats
+      recordGameResult({
+        length,
+        won: true,
+        guesses: rows.length + 1,
+        maxRows,
+        date: dateISO,
+      });
     } else if (rows.length + 1 >= maxRows) {
       setStatus('lost');
       setShowResult(true);
@@ -220,8 +260,17 @@ export default function GameScreen() {
       AccessibilityInfo.announceForAccessibility?.(
         `You lose. The word was ${answer.toUpperCase()}`,
       );
+
+      // Record loss stats
+      recordGameResult({
+        length,
+        won: false,
+        guesses: rows.length + 1,
+        maxRows,
+        date: dateISO,
+      });
     }
-  }, [answer, current, length, listsPromise, rows.length, status, showError, maxRows]);
+  }, [answer, current, length, listsPromise, rows.length, status, showError, maxRows, dateISO]);
 
   // Keyboard handlers
   const onKey = useCallback(
@@ -399,20 +448,108 @@ export default function GameScreen() {
       {/* Result modal */}
       <Modal transparent visible={showResult} animationType="fade">
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.resultTitle}>
-              {status === 'won'
-                ? 'You Win!'
-                : `The word was ${answer.toUpperCase()}`}
-            </Text>
-            <Pressable
-              style={styles.primary}
-              onPress={() => {
-                setShowResult(false);
-                handleNewGame();
-              }}>
-              <Text style={styles.primaryText}>Play again</Text>
-            </Pressable>
+          <View style={styles.resultModalCard}>
+            {/* Header */}
+            <View style={styles.resultHeader}>
+              <Text style={styles.resultEmoji}>
+                {getResultEmoji(rows.length, maxRows, status === 'won')}
+              </Text>
+              <Text style={styles.resultTitle}>
+                {getResultTitle(rows.length, maxRows, status === 'won')}
+              </Text>
+              <Text style={styles.resultSubtitle}>
+                {length}×{maxRows} · {new Date(dateISO).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}
+              </Text>
+            </View>
+
+            {/* Score and Word Section - Side by Side */}
+            <View style={styles.scoreWordRow}>
+              {/* Score Section - Smaller, on the left */}
+              <View style={styles.scoreSection}>
+                <Text style={styles.scoreLabel}>Score</Text>
+                <Text style={[styles.scoreValue, status === 'lost' && styles.scoreValueLost]}>
+                  {status === 'won' ? `${rows.length}/${maxRows}` : `X/${maxRows}`}
+                </Text>
+              </View>
+
+              {/* Word Display - Larger, on the right */}
+              <View style={[styles.wordDisplay, status === 'lost' && styles.wordDisplayLost]}>
+                <Text style={[styles.wordLabel, status === 'lost' && styles.wordLabelLost]}>
+                  {status === 'won' ? 'The word' : 'The word was'}
+                </Text>
+                <Text style={[styles.wordText, status === 'lost' && styles.wordTextLost]}>
+                  {answer.toUpperCase()}
+                </Text>
+              </View>
+            </View>
+
+            {/* Grid Section */}
+            <View style={styles.gridSection}>
+              <Text style={styles.gridLabel}>Your Guesses</Text>
+              <View style={styles.guessGrid}>
+                {feedback.map((row, rIdx) => (
+                  <View key={rIdx} style={styles.guessRow}>
+                    {row.map((state, cIdx) => (
+                      <View
+                        key={cIdx}
+                        style={[
+                          styles.guessTile,
+                          state === 'correct' && styles.tileCorrectSmall,
+                          state === 'present' && styles.tilePresentSmall,
+                          state === 'absent' && styles.tileAbsentSmall,
+                        ]}
+                      />
+                    ))}
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* Streak Display */}
+            {(() => {
+              const stats = getStatsForLength(length);
+              return stats.currentStreak > 0 ? (
+                <View style={styles.streakSection}>
+                  <Text style={styles.streakLabel}>🔥 Current Streak</Text>
+                  <Text style={styles.streakValue}>{stats.currentStreak} days</Text>
+                </View>
+              ) : null;
+            })()}
+
+            {/* Buttons */}
+            <View style={styles.resultButtonGroup}>
+              <Pressable
+                style={styles.btnShare}
+                onPress={async () => {
+                  const shareData = generateShareText({
+                    length,
+                    maxRows,
+                    guesses: rows.length,
+                    won: status === 'won',
+                    feedback,
+                    date: dateISO,
+                  });
+                  try {
+                    await Share.share({
+                      message: shareData.text,
+                    });
+                  } catch (error) {
+                    // User cancelled or error
+                  }
+                }}>
+                <Text style={styles.btnShareText}>Share</Text>
+              </Pressable>
+              <Pressable
+                style={styles.btnPlayAgain}
+                onPress={() => {
+                  setShowResult(false);
+                  // Immediately start a new game with the same settings
+                  // without opening the New Game sheet
+                  loadNew();
+                }}>
+                <Text style={styles.btnPlayAgainText}>Play Again</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
@@ -609,7 +746,16 @@ const Keyboard = React.memo(
             )}
             {row.split('').map(k => {
               const st = keyStates.get(k);
-              return <Key key={k} label={k} state={st} onPress={() => onKey(k)} />;
+              const disabled = st === 'absent';
+              return (
+                <Key
+                  key={k}
+                  label={k}
+                  state={st}
+                  disabled={disabled}
+                  onPress={() => onKey(k)}
+                />
+              );
             })}
             {idx === 2 && (
               <Key label="⌫" flex={2} onPress={() => onKey('DEL')} isAction accessibilityLabel="Delete" />
@@ -629,6 +775,7 @@ const Key = React.memo(
     flex,
     isAction,
     accessibilityLabel,
+    disabled,
   }: {
     label: string;
     onPress: () => void;
@@ -636,9 +783,11 @@ const Key = React.memo(
     flex?: number;
     isAction?: boolean;
     accessibilityLabel?: string;
+    disabled?: boolean;
   }) => (
     <Pressable
-      onPress={onPress}
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
       style={({pressed}) => [
         styles.key,
         {flex: flex ?? 1},
@@ -646,14 +795,17 @@ const Key = React.memo(
         state === 'present' && styles.kPresent,
         state === 'absent' && styles.kAbsent,
         isAction && styles.keyAction,
-        pressed && styles.keyPressed,
+        disabled && styles.keyDisabled,
+        !disabled && pressed && styles.keyPressed,
       ]}
       accessibilityRole="button"
+      accessibilityState={{disabled}}
       accessibilityLabel={accessibilityLabel || label}>
       <Text
         style={[
           styles.keyText,
           isAction && styles.keyTextAction,
+          disabled && styles.keyTextDisabled,
         ]}>
         {label}
       </Text>
@@ -745,9 +897,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#0a84ff',
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: '#3f3f46',
   },
-  newBtnText: {color: '#fff', fontWeight: '700', fontSize: 14},
+  newBtnText: {color: '#a1a1aa', fontWeight: '500', fontSize: 14},
 
   board: {flex: 1, justifyContent: 'center', gap: 8, paddingVertical: 12},
   row: {flexDirection: 'row', gap: 8, alignSelf: 'center'},
@@ -771,7 +925,8 @@ const styles = StyleSheet.create({
   },
   tCorrect: {backgroundColor: '#30d158', borderColor: '#30d158'},
   tPresent: {backgroundColor: '#ffcc00', borderColor: '#ffcc00'},
-  tAbsent: {backgroundColor: '#48484a', borderColor: '#48484a'},
+  // Darker absent tile to match keyboard contrast
+  tAbsent: {backgroundColor: '#2b2b2d', borderColor: '#2b2b2d'},
 
   kb: {gap: 8, marginBottom: 12, paddingHorizontal: 2},
   kbRow: {flexDirection: 'row', gap: 6, justifyContent: 'center'},
@@ -809,7 +964,14 @@ const styles = StyleSheet.create({
   },
   kCorrect: {backgroundColor: '#30d158'},
   kPresent: {backgroundColor: '#ffcc00'},
-  kAbsent: {backgroundColor: '#48484a'},
+  // Darker absent for clearer contrast; also used when disabled
+  kAbsent: {backgroundColor: '#2b2b2d'},
+  keyDisabled: {
+    backgroundColor: '#1f2023',
+  },
+  keyTextDisabled: {
+    color: '#9aa0a6',
+  },
 
   modalBackdrop: {
     flex: 1,
@@ -996,24 +1158,187 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: -0.2,
   },
-  modalCard: {
-    width: '80%',
+  // Result Modal Styles (from HTML design)
+  resultModalCard: {
+    width: '90%',
+    maxWidth: 400,
     backgroundColor: '#1c1c1e',
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
+    borderRadius: 16,
+    padding: 28,
+    paddingTop: 24,
+    paddingBottom: 24,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 8},
-    shadowOpacity: 0.44,
-    shadowRadius: 10,
-    elevation: 16,
+    shadowOffset: {width: 0, height: 20},
+    shadowOpacity: 0.5,
+    shadowRadius: 60,
+    elevation: 24,
+    borderWidth: 1,
+    borderColor: '#2c2c2e',
   },
-  resultTitle: {color: '#fff', fontSize: 20, fontWeight: '800'},
-  primary: {
-    backgroundColor: '#0a84ff',
+  resultHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  resultEmoji: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  resultTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  resultSubtitle: {
+    fontSize: 14,
+    color: '#8e8e93',
+    fontWeight: '500',
+  },
+  scoreWordRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  scoreSection: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    backgroundColor: '#2c2c2e',
+    borderRadius: 12,
+    minWidth: 90,
+  },
+  scoreLabel: {
+    fontSize: 11,
+    color: '#8e8e93',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  scoreValue: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#30d158',
+    lineHeight: 32,
+  },
+  scoreValueLost: {
+    color: '#ff453a',
+  },
+  wordDisplay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    backgroundColor: 'rgba(48, 209, 88, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(48, 209, 88, 0.2)',
+    borderRadius: 8,
+  },
+  wordDisplayLost: {
+    backgroundColor: 'rgba(255, 69, 58, 0.1)',
+    borderColor: 'rgba(255, 69, 58, 0.2)',
+  },
+  wordLabel: {
+    fontSize: 11,
+    color: '#30d158',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  wordLabelLost: {
+    color: '#ff453a',
+  },
+  wordText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#30d158',
+    letterSpacing: 2,
+  },
+  wordTextLost: {
+    color: '#ff453a',
+  },
+  gridSection: {
+    marginBottom: 20,
+  },
+  gridLabel: {
+    fontSize: 12,
+    color: '#8e8e93',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  guessGrid: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  guessRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  guessTile: {
+    width: 32,
+    height: 32,
+    borderRadius: 4,
+  },
+  tileCorrectSmall: {
+    backgroundColor: '#30d158',
+  },
+  tilePresentSmall: {
+    backgroundColor: '#ffcc00',
+  },
+  tileAbsentSmall: {
+    backgroundColor: '#48484a',
+  },
+  streakSection: {
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: 'rgba(48, 209, 88, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(48, 209, 88, 0.2)',
     borderRadius: 10,
-    padding: 10,
+    marginBottom: 20,
+  },
+  streakLabel: {
+    fontSize: 13,
+    color: '#30d158',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  streakValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#30d158',
+  },
+  resultButtonGroup: {
+    gap: 10,
+  },
+  btnShare: {
+    backgroundColor: '#30d158',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
     alignItems: 'center',
   },
-  primaryText: {color: '#fff', fontWeight: '800'},
+  btnShareText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000',
+  },
+  btnPlayAgain: {
+    backgroundColor: 'transparent',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#3a3a3c',
+  },
+  btnPlayAgainText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#8e8e93',
+  },
 });
