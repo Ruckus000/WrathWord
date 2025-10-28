@@ -88,9 +88,10 @@ export default function GameScreen() {
   const listsPromise = useMemo(() => Promise.resolve(getLists(length)), [getLists, length]);
 
   const loadNew = useCallback(
-    async (seedDate?: string) => {
+    async (seedDate?: string, explicitMode?: Mode) => {
       const {answers} = await listsPromise;
       const dateISO = seedDate ?? new Date().toISOString().slice(0, 10);
+      const effectiveMode: Mode = explicitMode ?? mode;
 
       // Get unused words for this length
       const unusedWords = getUnusedWords(length, answers);
@@ -99,7 +100,7 @@ export default function GameScreen() {
       const availableWords = unusedWords.length > 0 ? unusedWords : answers;
 
       const next =
-        mode === 'daily'
+        effectiveMode === 'daily'
           ? selectDaily(length, maxRows, dateISO, availableWords)
           : availableWords[Math.floor(Math.random() * availableWords.length)];
 
@@ -110,7 +111,7 @@ export default function GameScreen() {
       setCurrent('');
       setStatus('playing');
       setShowResult(false);
-      setJSON('session', {length, maxRows, mode, dateISO, answerHash: next}); // store hash in a real app
+      setJSON('session', {length, maxRows, mode: effectiveMode, dateISO, answerHash: next}); // store hash in a real app
     },
     [listsPromise, length, maxRows, mode],
   );
@@ -254,6 +255,11 @@ export default function GameScreen() {
       // Mark word as used after successful completion
       const lists = await listsPromise;
       markWordAsUsed(length, answer, lists.answers.length);
+      // If today's daily was completed, mark completion flag so onboarding cancel can respect it
+      if (mode === 'daily') {
+        const key = `daily.${length}x${maxRows}.${dateISO}.completed`;
+        setJSON(key, true);
+      }
     } else if (rows.length + 1 >= maxRows) {
       setStatus('lost');
       setShowResult(true);
@@ -274,8 +280,12 @@ export default function GameScreen() {
       // Mark word as used even on loss (they completed the game)
       const lists = await listsPromise;
       markWordAsUsed(length, answer, lists.answers.length);
+      if (mode === 'daily') {
+        const key = `daily.${length}x${maxRows}.${dateISO}.completed`;
+        setJSON(key, true);
+      }
     }
-  }, [answer, current, length, listsPromise, rows.length, status, showError, maxRows, dateISO]);
+  }, [answer, current, length, listsPromise, rows.length, status, showError, maxRows, dateISO, mode]);
 
   // Keyboard handlers
   const onKey = useCallback(
@@ -319,6 +329,39 @@ export default function GameScreen() {
     setTriggerNewFromSheet(true);
     setJSON('app.hasLaunched', true);
   }, [pendingLength, pendingMaxRows, pendingMode]);
+
+  const handleCancel = useCallback(async () => {
+    // On first launch, cancel should auto-start a sensible default without extra prompts
+    if (firstLaunchRef.current) {
+      const today = new Date().toISOString().slice(0, 10);
+      // Check if today's daily 5x6 has been completed previously
+      const key = `daily.5x6.${today}.completed`;
+      let alreadyPlayedDailyToday = getJSON<boolean>(key, false);
+      if (!alreadyPlayedDailyToday) {
+        const saved: any = getJSON('game.state', null as any);
+        if (
+          saved &&
+          saved.mode === 'daily' &&
+          saved.dateISO === today &&
+          (saved.status === 'won' || saved.status === 'lost')
+        ) {
+          alreadyPlayedDailyToday = true;
+        }
+      }
+      const nextMode: Mode = alreadyPlayedDailyToday ? 'free' : 'daily';
+      // Enforce 5x6 as requested
+      setLength(5);
+      setMaxRows(6);
+      setMode(nextMode);
+      setShowSettings(false);
+      setJSON('app.hasLaunched', true);
+      // Start a new game immediately with the intended mode to avoid race with async state
+      await loadNew(today, nextMode);
+      return;
+    }
+    // Otherwise, just close the sheet
+    setShowSettings(false);
+  }, [loadNew]);
 
   const gameInProgress = rows.length > 0 && status === 'playing';
 
@@ -446,7 +489,7 @@ export default function GameScreen() {
             <View style={styles.sheetFooter}>
               <Pressable
                 style={styles.cancelBtn}
-                onPress={() => setShowSettings(false)}>
+                onPress={handleCancel}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </Pressable>
               <Pressable style={styles.startBtn} onPress={handleStartGame}>
