@@ -103,9 +103,6 @@ export default function GameScreen() {
           ? selectDaily(length, maxRows, dateISO, availableWords)
           : availableWords[Math.floor(Math.random() * availableWords.length)];
 
-      // Mark word as used
-      markWordAsUsed(length, next, answers.length);
-
       setAnswer(next);
       setDateISO(dateISO);
       setRows([]);
@@ -253,6 +250,10 @@ export default function GameScreen() {
         maxRows,
         date: dateISO,
       });
+
+      // Mark word as used after successful completion
+      const lists = await listsPromise;
+      markWordAsUsed(length, answer, lists.answers.length);
     } else if (rows.length + 1 >= maxRows) {
       setStatus('lost');
       setShowResult(true);
@@ -269,6 +270,10 @@ export default function GameScreen() {
         maxRows,
         date: dateISO,
       });
+
+      // Mark word as used even on loss (they completed the game)
+      const lists = await listsPromise;
+      markWordAsUsed(length, answer, lists.answers.length);
     }
   }, [answer, current, length, listsPromise, rows.length, status, showError, maxRows, dateISO]);
 
@@ -332,16 +337,23 @@ export default function GameScreen() {
       ]}>
       {/* Controls */}
       <View style={styles.controls}>
-        <View style={styles.configBadge}>
-          <Text style={styles.configSize}>
-            {length}×{maxRows}
-          </Text>
-          {mode === 'daily' && formattedDate && (
-            <>
-              <View style={styles.configDivider} />
-              <Text style={styles.configDate}>{formattedDate}</Text>
-            </>
-          )}
+        <View style={styles.headerLeft}>
+          <View style={styles.quizTypeBadge}>
+            <Text style={styles.quizTypeText}>
+              {mode === 'daily' ? 'Daily' : 'Free'}
+            </Text>
+            {mode === 'daily' && formattedDate && (
+              <>
+                <View style={styles.quizTypeDivider} />
+                <Text style={styles.quizTypeDate}>{formattedDate}</Text>
+              </>
+            )}
+          </View>
+          <View style={styles.configBadge}>
+            <Text style={styles.configSize}>
+              {length}×{maxRows}
+            </Text>
+          </View>
         </View>
         <Pressable style={styles.newBtn} onPress={handleNewGame}>
           <Text style={styles.newBtnText}>New Game</Text>
@@ -508,10 +520,21 @@ export default function GameScreen() {
             {/* Streak Display */}
             {(() => {
               const stats = getStatsForLength(length);
-              return stats.currentStreak > 0 ? (
+              const hasStreak = stats.currentStreak > 0 || stats.maxStreak > 0;
+              return hasStreak ? (
                 <View style={styles.streakSection}>
-                  <Text style={styles.streakLabel}>🔥 Current Streak</Text>
-                  <Text style={styles.streakValue}>{stats.currentStreak} days</Text>
+                  {stats.currentStreak > 0 && (
+                    <View style={styles.streakItem}>
+                      <Text style={styles.streakLabel}>🔥 Current Streak</Text>
+                      <Text style={styles.streakValue}>{stats.currentStreak} days</Text>
+                    </View>
+                  )}
+                  {stats.maxStreak > 0 && (
+                    <View style={styles.streakItem}>
+                      <Text style={styles.streakLabel}>⭐ Best Streak</Text>
+                      <Text style={styles.streakValue}>{stats.maxStreak} days</Text>
+                    </View>
+                  )}
                 </View>
               ) : null;
             })()}
@@ -826,7 +849,12 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 4,
   },
-  configBadge: {
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  quizTypeBadge: {
     backgroundColor: '#18181b',
     borderWidth: 1,
     borderColor: '#27272a',
@@ -837,20 +865,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  configSize: {
+  quizTypeText: {
     fontSize: 13,
     fontWeight: '500',
     color: '#e4e4e7',
   },
-  configDivider: {
+  quizTypeDivider: {
     width: 1,
     height: 14,
     backgroundColor: '#3f3f46',
   },
-  configDate: {
+  quizTypeDate: {
     fontSize: 12,
     fontWeight: '400',
     color: '#71717a',
+  },
+  configBadge: {
+    backgroundColor: '#18181b',
+    borderWidth: 1,
+    borderColor: '#27272a',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 7,
+  },
+  configSize: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#e4e4e7',
   },
   errorContainer: {
     alignItems: 'center',
@@ -1293,13 +1334,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#48484a',
   },
   streakSection: {
-    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
     padding: 16,
     backgroundColor: 'rgba(48, 209, 88, 0.1)',
     borderWidth: 1,
     borderColor: 'rgba(48, 209, 88, 0.2)',
     borderRadius: 10,
     marginBottom: 20,
+  },
+  streakItem: {
+    flex: 1,
+    alignItems: 'center',
   },
   streakLabel: {
     fontSize: 13,

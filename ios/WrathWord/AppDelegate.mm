@@ -22,6 +22,11 @@
 - (NSURL *)bundleURL
 {
 #if DEBUG
+  // Try embedded bundle first, fall back to Metro
+  NSURL *embeddedURL = [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
+  if (embeddedURL) {
+    return embeddedURL;
+  }
   return [[RCTBundleURLProvider sharedSettings] jsBundleURLForBundleRoot:@"index"];
 #else
   return [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];

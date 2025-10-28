@@ -10,3 +10,5 @@ android/app/build/
 .expo/
 .vscode/
 .idea/
+*.xcuserstate
+*.xcuserdatad/

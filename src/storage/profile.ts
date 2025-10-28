@@ -153,11 +153,11 @@ export function recordGameResult(params: {
         // Streak broken
         stats.currentStreak = 1;
       }
+    }
 
-      // Update max streak
-      if (stats.currentStreak > stats.maxStreak) {
-        stats.maxStreak = stats.currentStreak;
-      }
+    // Update max streak (moved outside to catch first win)
+    if (stats.currentStreak > stats.maxStreak) {
+      stats.maxStreak = stats.currentStreak;
     }
   } else {
     // Lost, break streak
