@@ -64,8 +64,6 @@ export default function GameScreen() {
   const [showSettings, setShowSettings] = useState(firstLaunchRef.current);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const shakeAnim = useRef(new Animated.Value(0)).current;
-  // Only trigger a fresh game when settings are changed via the sheet
-  const [triggerNewFromSheet, setTriggerNewFromSheet] = useState<boolean>(false);
 
   // Pending settings (for sheet)
   const [pendingLength, setPendingLength] = useState<number>(length);
@@ -88,20 +86,25 @@ export default function GameScreen() {
   const listsPromise = useMemo(() => Promise.resolve(getLists(length)), [getLists, length]);
 
   const loadNew = useCallback(
-    async (seedDate?: string, explicitMode?: Mode) => {
-      const {answers} = await listsPromise;
-      const dateISO = seedDate ?? new Date().toISOString().slice(0, 10);
+    async (seedDate?: string, explicitMode?: Mode, explicitLength?: number, explicitMaxRows?: number) => {
+      // Use explicit parameters if provided, otherwise fall back to state
+      const effectiveLength = explicitLength ?? length;
+      const effectiveMaxRows = explicitMaxRows ?? maxRows;
       const effectiveMode: Mode = explicitMode ?? mode;
 
+      // Fetch the word lists for the effective length
+      const {answers} = getLists(effectiveLength);
+      const dateISO = seedDate ?? new Date().toISOString().slice(0, 10);
+
       // Get unused words for this length
-      const unusedWords = getUnusedWords(length, answers);
+      const unusedWords = getUnusedWords(effectiveLength, answers);
 
       // If all words have been used, use the full list (cycle resets automatically)
       const availableWords = unusedWords.length > 0 ? unusedWords : answers;
 
       const next =
         effectiveMode === 'daily'
-          ? selectDaily(length, maxRows, dateISO, availableWords)
+          ? selectDaily(effectiveLength, effectiveMaxRows, dateISO, availableWords)
           : availableWords[Math.floor(Math.random() * availableWords.length)];
 
       setAnswer(next);
@@ -111,20 +114,16 @@ export default function GameScreen() {
       setCurrent('');
       setStatus('playing');
       setShowResult(false);
-      setJSON('session', {length, maxRows, mode: effectiveMode, dateISO, answerHash: next}); // store hash in a real app
+      setJSON('session', {length: effectiveLength, maxRows: effectiveMaxRows, mode: effectiveMode, dateISO, answerHash: next}); // store hash in a real app
     },
-    [listsPromise, length, maxRows, mode],
+    [getLists, length, maxRows, mode],
   );
 
   useEffect(() => {
     setJSON('settings.length', length);
     setJSON('settings.maxRows', maxRows);
     setJSON('settings.mode', mode);
-    if (triggerNewFromSheet) {
-      loadNew();
-      setTriggerNewFromSheet(false);
-    }
-  }, [length, maxRows, mode, triggerNewFromSheet, loadNew]);
+  }, [length, maxRows, mode]);
 
   // Persist progress whenever key fields change
   useEffect(() => {
@@ -326,9 +325,10 @@ export default function GameScreen() {
     setMaxRows(pendingMaxRows);
     setMode(pendingMode);
     setShowSettings(false);
-    setTriggerNewFromSheet(true);
     setJSON('app.hasLaunched', true);
-  }, [pendingLength, pendingMaxRows, pendingMode]);
+    // Pass the new settings directly to loadNew to avoid state update race condition
+    loadNew(undefined, pendingMode, pendingLength, pendingMaxRows);
+  }, [pendingLength, pendingMaxRows, pendingMode, loadNew]);
 
   const handleCancel = useCallback(async () => {
     // On first launch, cancel should auto-start a sensible default without extra prompts
@@ -355,8 +355,8 @@ export default function GameScreen() {
       setMode(nextMode);
       setShowSettings(false);
       setJSON('app.hasLaunched', true);
-      // Start a new game immediately with the intended mode to avoid race with async state
-      await loadNew(today, nextMode);
+      // Start a new game immediately with explicit settings to avoid race with async state
+      await loadNew(today, nextMode, 5, 6);
       return;
     }
     // Otherwise, just close the sheet
