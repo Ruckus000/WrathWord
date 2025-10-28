@@ -72,6 +72,13 @@ fi
 
 # Verify CocoaPods
 if command -v pod >/dev/null 2>&1; then
+    # Remove Podfile.lock to avoid checksum mismatches in CI
+    # This forces CocoaPods to generate a fresh lockfile matching the npm dependencies
+    if [ -f Podfile.lock ]; then
+        echo "🗑️  Removing Podfile.lock to avoid checksum conflicts..."
+        rm -f Podfile.lock
+    fi
+
     echo "✅ Running pod install..."
     pod install
 else
