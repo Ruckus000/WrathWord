@@ -22,13 +22,16 @@
 - (NSURL *)bundleURL
 {
 #if DEBUG
-  // Try embedded bundle first, fall back to Metro
+  // In DEBUG mode, try embedded bundle first to avoid "Connect to Metro" message
+  // If bundle exists, use it; otherwise fall back to Metro for live reloading
   NSURL *embeddedURL = [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
   if (embeddedURL) {
     return embeddedURL;
   }
+  // Fall back to Metro if no embedded bundle is available
   return [[RCTBundleURLProvider sharedSettings] jsBundleURLForBundleRoot:@"index"];
 #else
+  // RELEASE builds always use embedded bundle
   return [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
 #endif
 }
