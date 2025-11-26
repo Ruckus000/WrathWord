@@ -41,13 +41,20 @@ import {
   getResultEmoji,
   getResultTitle,
 } from '../logic/shareResult';
+import Header from '../components/Header';
+import {palette} from '../theme/colors';
+import LinearGradient from 'react-native-linear-gradient';
 
 type Mode = 'daily' | 'free';
 type GameStatus = 'playing' | 'won' | 'lost';
 
 const LETTERS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM']; // simple keyboard
 
-export default function GameScreen() {
+type Props = {
+  onNavigateToStats?: () => void;
+};
+
+export default function GameScreen({onNavigateToStats}: Props) {
   const insets = useSafeAreaInsets();
   const [length, setLength] = useState<number>(getJSON('settings.length', 5));
   const [maxRows, setMaxRows] = useState<number>(getJSON('settings.maxRows', 6));
@@ -378,30 +385,15 @@ export default function GameScreen() {
         styles.container,
         {paddingTop: insets.top, paddingBottom: insets.bottom},
       ]}>
-      {/* Controls */}
-      <View style={styles.controls}>
-        <View style={styles.headerLeft}>
-          <View style={styles.quizTypeBadge}>
-            <Text style={styles.quizTypeText}>
-              {mode === 'daily' ? 'Daily' : 'Free'}
-            </Text>
-            {mode === 'daily' && formattedDate && (
-              <>
-                <View style={styles.quizTypeDivider} />
-                <Text style={styles.quizTypeDate}>{formattedDate}</Text>
-              </>
-            )}
-          </View>
-          <View style={styles.configBadge}>
-            <Text style={styles.configSize}>
-              {length}×{maxRows}
-            </Text>
-          </View>
-        </View>
-        <Pressable style={styles.newBtn} onPress={handleNewGame}>
-          <Text style={styles.newBtnText}>New Game</Text>
-        </Pressable>
-      </View>
+      {/* Header */}
+      <Header
+        mode={mode}
+        length={length}
+        maxRows={maxRows}
+        formattedDate={formattedDate}
+        onMenuPress={onNavigateToStats}
+        onNewGamePress={handleNewGame}
+      />
 
       {/* Error message */}
       {errorMsg ? (
@@ -606,14 +598,19 @@ export default function GameScreen() {
                 <Text style={styles.btnShareText}>Share</Text>
               </Pressable>
               <Pressable
-                style={styles.btnPlayAgain}
                 onPress={() => {
                   setShowResult(false);
                   // Immediately start a new game with the same settings
                   // without opening the New Game sheet
                   loadNew();
                 }}>
-                <Text style={styles.btnPlayAgainText}>Play Again</Text>
+                <LinearGradient
+                  colors={[palette.gradientStart, palette.gradientEnd]}
+                  start={{x: 0, y: 0}}
+                  end={{x: 1, y: 1}}
+                  style={styles.btnPlayAgain}>
+                  <Text style={styles.btnPlayAgainText}>Play Again</Text>
+                </LinearGradient>
               </Pressable>
             </View>
           </View>
@@ -723,7 +720,7 @@ const Board = React.memo(
     const {width} = useWindowDimensions();
     const gap = 8;
     const maxTileSize = 62;
-    const padding = 24;
+    const padding = 16;
     const availableWidth = width - padding * 2;
     const calculatedSize = Math.min(
       maxTileSize,
@@ -773,8 +770,33 @@ const Tile = React.memo(
     size?: {width: number; height: number};
   }) => {
     const fontSize = size ? Math.floor(size.width * 0.54) : 28;
+    const flipAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+      if (state !== 'empty') {
+        // Trigger flip animation when tile gets a state
+        Animated.sequence([
+          Animated.timing(flipAnim, {
+            toValue: 1,
+            duration: 250,
+            useNativeDriver: true,
+          }),
+          Animated.timing(flipAnim, {
+            toValue: 0,
+            duration: 250,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
+    }, [state, flipAnim]);
+
+    const rotateX = flipAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['0deg', '90deg'],
+    });
+
     return (
-      <View
+      <Animated.View
         style={[
           styles.tile,
           size,
@@ -782,6 +804,7 @@ const Tile = React.memo(
           state === 'present' && styles.tPresent,
           state === 'absent' && styles.tAbsent,
           isActive && styles.tileActive,
+          {transform: [{rotateX}]},
         ]}>
         <Text
           style={[styles.tileText, {fontSize}]}
@@ -790,7 +813,7 @@ const Tile = React.memo(
           accessibilityRole="text">
           {ch !== ' ' ? ch : ''}
         </Text>
-      </View>
+      </Animated.View>
     );
   },
 );
@@ -882,8 +905,8 @@ const Key = React.memo(
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111',
-    paddingHorizontal: 12,
+    backgroundColor: palette.bg,
+    paddingHorizontal: 16,
   },
   controls: {
     flexDirection: 'row',
@@ -896,6 +919,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  menuBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#18181b',
+    borderWidth: 1,
+    borderColor: '#27272a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuBtnText: {
+    fontSize: 20,
+    color: '#e4e4e7',
   },
   quizTypeBadge: {
     backgroundColor: '#18181b',
@@ -992,74 +1029,67 @@ const styles = StyleSheet.create({
   tile: {
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#333',
+    borderColor: palette.tileBorder,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1c1c1e',
+    backgroundColor: palette.tileEmpty,
   },
   tileActive: {
-    borderColor: '#0a84ff',
-    borderWidth: 3,
-    transform: [{scale: 1.03}],
+    borderColor: palette.tileBorderActive,
+    borderWidth: 2,
+    transform: [{scale: 1.05}],
   },
   tileText: {
-    color: '#fff',
+    color: palette.textPrimary,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
-  tCorrect: {backgroundColor: '#30d158', borderColor: '#30d158'},
-  tPresent: {backgroundColor: '#ffcc00', borderColor: '#ffcc00'},
-  // Darker absent tile to match keyboard contrast
-  tAbsent: {backgroundColor: '#2b2b2d', borderColor: '#2b2b2d'},
+  tCorrect: {backgroundColor: palette.correct, borderColor: palette.correct},
+  tPresent: {backgroundColor: palette.present, borderColor: palette.present},
+  tAbsent: {backgroundColor: palette.absent, borderColor: palette.absent},
 
   kb: {gap: 8, marginBottom: 12, paddingHorizontal: 2},
-  kbRow: {flexDirection: 'row', gap: 6, justifyContent: 'center'},
+  kbRow: {flexDirection: 'row', gap: 4, justifyContent: 'center'},
   key: {
-    minWidth: 32,
-    height: 48,
+    minWidth: 31,
+    height: 52,
     borderRadius: 6,
-    backgroundColor: '#686868',
+    backgroundColor: palette.keyBase,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
+    paddingHorizontal: 8,
   },
   keyPressed: {
-    backgroundColor: '#8e8e93',
+    backgroundColor: palette.keyPressed,
     transform: [{scale: 0.94}],
   },
   keyAction: {
-    backgroundColor: '#505052',
+    backgroundColor: palette.keyAction,
   },
   keyText: {
-    color: '#fff',
-    fontSize: 16,
+    color: palette.textPrimary,
+    fontSize: 15,
     fontWeight: '600',
     textTransform: 'uppercase',
   },
   keyTextAction: {
-    fontSize: 24,
-    fontWeight: '400',
-    textTransform: 'none',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
-  kCorrect: {backgroundColor: '#30d158'},
-  kPresent: {backgroundColor: '#ffcc00'},
-  // Darker absent for clearer contrast; also used when disabled
-  kAbsent: {backgroundColor: '#2b2b2d'},
+  kCorrect: {backgroundColor: palette.correct},
+  kPresent: {backgroundColor: palette.present},
+  kAbsent: {backgroundColor: palette.absent},
   keyDisabled: {
-    backgroundColor: '#1f2023',
+    backgroundColor: palette.keyDisabled,
   },
   keyTextDisabled: {
-    color: '#9aa0a6',
+    color: palette.keyAction,
   },
 
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: palette.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1245,37 +1275,37 @@ const styles = StyleSheet.create({
   // Result Modal Styles (from HTML design)
   resultModalCard: {
     width: '90%',
-    maxWidth: 400,
-    backgroundColor: '#1c1c1e',
-    borderRadius: 16,
-    padding: 28,
-    paddingTop: 24,
-    paddingBottom: 24,
+    maxWidth: 340,
+    backgroundColor: palette.card,
+    borderRadius: 20,
+    padding: 32,
+    paddingTop: 28,
+    paddingBottom: 28,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 20},
     shadowOpacity: 0.5,
     shadowRadius: 60,
     elevation: 24,
     borderWidth: 1,
-    borderColor: '#2c2c2e',
+    borderColor: palette.cardBorder,
   },
   resultHeader: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   resultEmoji: {
-    fontSize: 48,
-    marginBottom: 8,
+    fontSize: 64,
+    marginBottom: 16,
   },
   resultTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#fff',
-    marginBottom: 4,
+    color: palette.textPrimary,
+    marginBottom: 8,
   },
   resultSubtitle: {
     fontSize: 14,
-    color: '#8e8e93',
+    color: palette.textMuted,
     fontWeight: '500',
   },
   scoreWordRow: {
@@ -1402,32 +1432,35 @@ const styles = StyleSheet.create({
     color: '#30d158',
   },
   resultButtonGroup: {
-    gap: 10,
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 28,
   },
   btnShare: {
-    backgroundColor: '#30d158',
+    flex: 1,
+    backgroundColor: palette.accentPurpleLight,
+    borderWidth: 1,
+    borderColor: palette.accentPurpleBorder,
     paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 10,
+    paddingHorizontal: 24,
+    borderRadius: 12,
     alignItems: 'center',
   },
   btnShareText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#000',
+    fontSize: 15,
+    fontWeight: '600',
+    color: palette.accentPurple,
   },
   btnPlayAgain: {
-    backgroundColor: 'transparent',
+    flex: 1,
     paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 10,
+    paddingHorizontal: 24,
+    borderRadius: 12,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#3a3a3c',
   },
   btnPlayAgainText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#8e8e93',
+    fontSize: 15,
+    fontWeight: '600',
+    color: palette.textPrimary,
   },
 });

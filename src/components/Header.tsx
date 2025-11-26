@@ -2,7 +2,6 @@
 import React from 'react';
 import {View, Text, StyleSheet, Pressable} from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import ProfileAvatar from './ProfileAvatar';
 import {palette} from '../theme/colors';
 
 type Props = {
@@ -11,7 +10,6 @@ type Props = {
   maxRows: number;
   formattedDate?: string;
   onMenuPress?: () => void;
-  onAvatarPress?: () => void;
   onNewGamePress: () => void;
 };
 
@@ -21,7 +19,6 @@ export default function Header({
   maxRows,
   formattedDate,
   onMenuPress,
-  onAvatarPress,
   onNewGamePress,
 }: Props) {
   return (
@@ -32,13 +29,12 @@ export default function Header({
             <Text style={styles.menuIcon}>☰</Text>
           </Pressable>
         )}
-        {onAvatarPress && <ProfileAvatar letter="W" size="small" onPress={onAvatarPress} />}
       </View>
 
       <View style={styles.gameInfo}>
         <View style={[styles.modeIndicator, mode === 'free' && styles.modeIndicatorFree]}>
           <View style={[styles.modeDot, mode === 'free' && styles.modeDotFree]} />
-          <Text style={styles.modeText}>{mode === 'daily' ? 'Daily' : 'Free'}</Text>
+          <Text style={styles.modeText} numberOfLines={1}>{mode === 'daily' ? 'Daily' : 'Free'}</Text>
         </View>
         <View style={styles.configDisplay}>
           <Text style={styles.configText}>
@@ -65,18 +61,19 @@ export default function Header({
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 0,
     paddingVertical: 16,
     minHeight: 60,
+    position: 'relative',
   },
   headerLeft: {
+    position: 'absolute',
+    left: 20,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    flexShrink: 0,
-    minWidth: 0,
   },
   menuBtn: {
     width: 40,
@@ -96,8 +93,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flexShrink: 1,
-    maxWidth: '50%',
+    justifyContent: 'center',
   },
   modeIndicator: {
     flexDirection: 'row',
@@ -143,11 +139,11 @@ const styles = StyleSheet.create({
     color: palette.accentPurple,
   },
   headerRight: {
+    position: 'absolute',
+    right: 20,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flexShrink: 0,
-    minWidth: 0,
   },
   newGameBtn: {
     paddingVertical: 8,
