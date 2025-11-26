@@ -29,6 +29,7 @@ export const palette = {
   // Status
   success: '#34c759',
   warning: '#ff9500',
+  destructive: '#ef4444',
 
   // Accent
   accentPurple: '#8b5cf6',

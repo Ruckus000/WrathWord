@@ -16,7 +16,8 @@
     "react-native": "0.79.6",
     "react-native-linear-gradient": "^2.8.3",
     "react-native-mmkv": "^2.12.2",
-    "react-native-safe-area-context": "5.4.0"
+    "react-native-safe-area-context": "5.4.0",
+    "react-native-svg": "^15.15.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

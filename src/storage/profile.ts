@@ -28,6 +28,8 @@ export type UserPreferences = {
   defaultLength: number;
   defaultRows: number;
   defaultMode: 'daily' | 'free';
+  hapticsEnabled: boolean;
+  highContrastEnabled: boolean;
 };
 
 const PROFILE_KEY = 'user.profile';
@@ -71,6 +73,8 @@ function createProfile(): UserProfile {
       defaultLength: 5,
       defaultRows: 6,
       defaultMode: 'daily',
+      hapticsEnabled: true,
+      highContrastEnabled: false,
     },
   };
 

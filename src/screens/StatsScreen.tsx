@@ -6,197 +6,342 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
+  Alert,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import LinearGradient from 'react-native-linear-gradient';
-import {getProfile, getStatsForLength, getWinRate, getTotalStats} from '../storage/profile';
+import {
+  getProfile,
+  getStatsForLength,
+  getTotalStats,
+  resetStats,
+  updatePreferences,
+} from '../storage/profile';
 import {palette} from '../theme/colors';
+import {Toggle} from '../components/Toggle';
+import {
+  ChevronLeft,
+  ChevronRight,
+  HapticsIcon,
+  EyeIcon,
+  UserIcon,
+  DocumentIcon,
+  ShieldIcon,
+  ChatIcon,
+  TrashIcon,
+} from '../components/icons/SettingsIcons';
 
 type Props = {
   onBack: () => void;
 };
 
-type Tab = 'statistics' | 'achievements' | 'settings';
-
 export default function StatsScreen({onBack}: Props) {
   const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState<Tab>('statistics');
   const profile = getProfile();
 
-  // Get default/current length stats
-  const defaultLength = profile.preferences.defaultLength;
-  const stats = getStatsForLength(defaultLength);
-  const winRate = getWinRate(defaultLength);
+  const [selectedLength, setSelectedLength] = useState(
+    profile.preferences.defaultLength,
+  );
+  const [haptics, setHaptics] = useState(
+    profile.preferences.hapticsEnabled ?? true,
+  );
+  const [highContrast, setHighContrast] = useState(
+    profile.preferences.highContrastEnabled ?? false,
+  );
+
   const totalStats = getTotalStats();
+  const lengthStats = getStatsForLength(selectedLength);
+  const distribution = lengthStats.guessDistribution;
+  const maxDistCount = Math.max(...Object.values(distribution), 1);
+
+  // Find best guess (most frequent)
+  const bestGuessNum = Object.entries(distribution).reduce(
+    (best, [num, count]) => {
+      if (count > (distribution[best] || 0)) {
+        return parseInt(num, 10);
+      }
+      return best;
+    },
+    1,
+  );
+
+  const handleHapticsChange = (value: boolean) => {
+    setHaptics(value);
+    updatePreferences({hapticsEnabled: value});
+  };
+
+  const handleHighContrastChange = (value: boolean) => {
+    setHighContrast(value);
+    updatePreferences({highContrastEnabled: value});
+  };
+
+  const handleResetStats = () => {
+    Alert.alert(
+      'Reset Statistics',
+      'This will permanently delete all your game statistics. This cannot be undone.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: () => {
+            resetStats();
+          },
+        },
+      ],
+    );
+  };
 
   return (
-    <View style={[styles.container, {paddingTop: insets.top, paddingBottom: insets.bottom}]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={onBack}>
-          <Text style={styles.backIcon}>←</Text>
-        </Pressable>
-        <Text style={styles.headerTitle}>Profile & Stats</Text>
-        <View style={styles.placeholder} />
-      </View>
+    <View
+      style={[
+        styles.container,
+        {paddingTop: insets.top, paddingBottom: insets.bottom},
+      ]}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Pressable style={styles.backBtn} onPress={onBack}>
+            <ChevronLeft size={22} color={palette.primary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Stats & Settings</Text>
+        </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Profile Section */}
-        <View style={styles.profileSection}>
-          <LinearGradient
-            colors={[palette.gradientStart, palette.gradientEnd]}
-            start={{x: 0, y: 0}}
-            end={{x: 1, y: 1}}
-            style={styles.profileAvatar}>
-            <Text style={styles.profileAvatarText}>W</Text>
-          </LinearGradient>
-          <Text style={styles.profileName}>Wrath</Text>
-          <View style={styles.profileLevel}>
-            <Text style={styles.levelIcon}>⭐</Text>
-            <Text style={styles.levelText}>Level {Math.floor(totalStats.won / 10) + 1}</Text>
+        {/* Performance Card */}
+        <View style={styles.performanceCard}>
+          <View style={styles.perfHeader}>
+            <View style={styles.streakRow}>
+              <Text style={styles.streakFire}>🔥</Text>
+              <Text style={styles.streakNumber}>{totalStats.currentStreak}</Text>
+              <Text style={styles.streakLabel}>day streak</Text>
+            </View>
+            <View style={styles.bestCol}>
+              <Text style={styles.bestLabel}>Best</Text>
+              <Text style={styles.bestValue}>{totalStats.maxStreak}</Text>
+            </View>
           </View>
-          <View style={styles.xpBar}>
-            <View style={[styles.xpFill, {width: `${(totalStats.won % 10) * 10}%`}]}>
-              <LinearGradient
-                colors={[palette.gradientStart, palette.gradientEnd]}
-                start={{x: 0, y: 0}}
-                end={{x: 1, y: 0}}
-                style={StyleSheet.absoluteFill}
+          <View style={styles.statsRow}>
+            <StatCell value={totalStats.played} label="Played" isFirst />
+            <StatCell value={totalStats.won} label="Won" />
+            <StatCell value={`${totalStats.winRate}%`} label="Win Rate" isLast />
+          </View>
+        </View>
+
+        {/* Distribution Section */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionHeaderTitle}>Guess Distribution</Text>
+          <View style={styles.lengthPicker}>
+            {[2, 3, 4, 5, 6].map(n => (
+              <Pressable
+                key={n}
+                style={[
+                  styles.lengthOpt,
+                  selectedLength === n && styles.lengthOptActive,
+                ]}
+                onPress={() => setSelectedLength(n)}>
+                <Text
+                  style={[
+                    styles.lengthOptText,
+                    selectedLength === n && styles.lengthOptTextActive,
+                  ]}>
+                  {n}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.distGrid}>
+          {[1, 2, 3, 4, 5, 6].map(guessNum => (
+            <DistributionColumn
+              key={guessNum}
+              guessNum={guessNum}
+              count={distribution[guessNum] || 0}
+              maxCount={maxDistCount}
+              isBest={guessNum === bestGuessNum && (distribution[guessNum] || 0) > 0}
+            />
+          ))}
+        </View>
+
+        {/* Preferences Section */}
+        <Text style={styles.sectionTitle}>Preferences</Text>
+        <View style={styles.settingsGroup}>
+          <SettingsRow
+            icon={<HapticsIcon size={18} />}
+            iconBg={palette.success}
+            label="Haptics"
+            right={
+              <Toggle value={haptics} onValueChange={handleHapticsChange} />
+            }
+          />
+          <SettingsRow
+            icon={<EyeIcon size={18} />}
+            iconBg={palette.primary}
+            label="High Contrast"
+            right={
+              <Toggle
+                value={highContrast}
+                onValueChange={handleHighContrastChange}
               />
-            </View>
-          </View>
-          <Text style={styles.xpText}>{totalStats.won % 10 * 100} / 1,000 XP</Text>
+            }
+            isLast
+          />
         </View>
 
-        {/* Tab Navigation */}
-        <View style={styles.tabNav}>
-          <Pressable
-            style={[styles.tabBtn, activeTab === 'statistics' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('statistics')}>
-            <Text style={[styles.tabBtnText, activeTab === 'statistics' && styles.tabBtnTextActive]}>
-              Statistics
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.tabBtn, activeTab === 'achievements' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('achievements')}>
-            <Text style={[styles.tabBtnText, activeTab === 'achievements' && styles.tabBtnTextActive]}>
-              Achievements
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.tabBtn, activeTab === 'settings' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('settings')}>
-            <Text style={[styles.tabBtnText, activeTab === 'settings' && styles.tabBtnTextActive]}>
-              Settings
-            </Text>
-          </Pressable>
+        {/* Account Section */}
+        <Text style={styles.sectionTitle}>Account</Text>
+        <View style={styles.settingsGroup}>
+          <SettingsRow
+            icon={<UserIcon size={18} />}
+            iconBg={palette.primary}
+            label="Sign In"
+            subtitle="Sync progress"
+            onPress={() => {}}
+            isLast
+          />
         </View>
 
-        {/* Statistics Tab */}
-        {activeTab === 'statistics' && (
-          <>
-            {/* Stats Grid */}
-            <View style={styles.statsGrid}>
-              <View style={[styles.statCard, styles.statCardFeatured]}>
-                <Text style={styles.streakValue}>🔥 {totalStats.currentStreak}</Text>
-                <Text style={styles.statLabel}>Current Streak</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{totalStats.played}</Text>
-                <Text style={styles.statLabel}>Games Played</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{totalStats.winRate}%</Text>
-                <Text style={styles.statLabel}>Win Rate</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{totalStats.won}</Text>
-                <Text style={styles.statLabel}>Games Won</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{totalStats.maxStreak}</Text>
-                <Text style={styles.statLabel}>Max Streak</Text>
-              </View>
-            </View>
+        {/* About Section */}
+        <Text style={styles.sectionTitle}>About</Text>
+        <View style={styles.settingsGroup}>
+          <SettingsRow
+            icon={<DocumentIcon size={18} />}
+            iconBg={palette.textDim}
+            label="Terms of Service"
+            onPress={() => {}}
+          />
+          <SettingsRow
+            icon={<ShieldIcon size={18} />}
+            iconBg={palette.textDim}
+            label="Privacy Policy"
+            onPress={() => {}}
+          />
+          <SettingsRow
+            icon={<ChatIcon size={18} />}
+            iconBg={palette.textDim}
+            label="Send Feedback"
+            onPress={() => {}}
+            isLast
+          />
+        </View>
 
-            {/* Guess Distribution */}
-            <View style={styles.distributionSection}>
-              <Text style={styles.sectionTitle}>Guess Distribution</Text>
-              {[1, 2, 3, 4, 5, 6].map(guessNum => {
-                const count = stats.guessDistribution[guessNum] || 0;
-                const maxCount = Math.max(...Object.values(stats.guessDistribution), 1);
-                const percentage = (count / maxCount) * 100;
-                return (
-                  <View key={guessNum} style={styles.distributionRow}>
-                    <Text style={styles.distributionLabel}>{guessNum}</Text>
-                    <View style={styles.distributionBarBg}>
-                      <View style={[styles.distributionBar, {width: `${Math.max(percentage, count > 0 ? 10 : 0)}%`}]}>
-                        <LinearGradient
-                          colors={[palette.gradientStart, palette.gradientEnd]}
-                          start={{x: 0, y: 0}}
-                          end={{x: 1, y: 0}}
-                          style={StyleSheet.absoluteFill}
-                        />
-                        {count > 0 && <Text style={styles.distributionCount}>{count}</Text>}
-                      </View>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </>
-        )}
+        {/* Danger Zone */}
+        <View style={styles.settingsGroup}>
+          <SettingsRow
+            icon={<TrashIcon size={18} />}
+            iconBg={palette.destructive}
+            label="Reset All Statistics"
+            destructive
+            onPress={handleResetStats}
+            isLast
+          />
+        </View>
 
-        {/* Achievements Tab */}
-        {activeTab === 'achievements' && (
-          <View style={styles.placeholderView}>
-            <Text style={styles.placeholderText}>🏆</Text>
-            <Text style={styles.placeholderTitle}>Achievements Coming Soon</Text>
-            <Text style={styles.placeholderSubtitle}>Track your progress and unlock badges</Text>
-          </View>
-        )}
-
-        {/* Settings Tab */}
-        {activeTab === 'settings' && (
-          <View style={styles.menuSection}>
-            <MenuItem
-              icon="❓"
-              title="How to Play"
-              subtitle="Learn the game rules"
-            />
-            <MenuItem
-              icon="📤"
-              title="Share WrathWord"
-              subtitle="Invite friends to play"
-            />
-            <MenuItem
-              icon="ℹ️"
-              title="About"
-              subtitle="Version 1.0.0"
-            />
-          </View>
-        )}
-
-        <View style={styles.bottomSpacing} />
+        <Text style={styles.versionFooter}>WrathWord v1.0.0</Text>
       </ScrollView>
     </View>
   );
 }
 
-function MenuItem({icon, title, subtitle}: {icon: string; title: string; subtitle: string}) {
+function StatCell({
+  value,
+  label,
+  isFirst,
+  isLast,
+}: {
+  value: string | number;
+  label: string;
+  isFirst?: boolean;
+  isLast?: boolean;
+}) {
   return (
-    <Pressable style={styles.menuItem}>
-      <View style={styles.menuItemLeft}>
-        <View style={styles.menuIcon}>
-          <Text style={styles.menuIconText}>{icon}</Text>
-        </View>
-        <View style={styles.menuText}>
-          <Text style={styles.menuTitle}>{title}</Text>
-          <Text style={styles.menuSubtitle}>{subtitle}</Text>
+    <View
+      style={[
+        styles.statCell,
+        isFirst && styles.statCellFirst,
+        isLast && styles.statCellLast,
+      ]}>
+      <Text style={styles.statCellValue}>{value}</Text>
+      <Text style={styles.statCellLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function DistributionColumn({
+  guessNum,
+  count,
+  maxCount,
+  isBest,
+}: {
+  guessNum: number;
+  count: number;
+  maxCount: number;
+  isBest: boolean;
+}) {
+  const heightPercent = maxCount > 0 ? (count / maxCount) * 100 : 0;
+
+  return (
+    <View style={styles.distCol}>
+      <View style={styles.distBarContainer}>
+        <View
+          style={[
+            styles.distBar,
+            {
+              height: `${Math.max(heightPercent, count > 0 ? 15 : 0)}%`,
+            },
+            isBest && styles.distBarBest,
+          ]}>
+          {count > 0 && <Text style={styles.distCount}>{count}</Text>}
         </View>
       </View>
-      <Text style={styles.menuArrow}>›</Text>
+      <Text style={styles.distLabel}>{guessNum}</Text>
+    </View>
+  );
+}
+
+function SettingsRow({
+  icon,
+  iconBg,
+  label,
+  subtitle,
+  right,
+  onPress,
+  destructive,
+  isLast,
+}: {
+  icon: React.ReactNode;
+  iconBg: string;
+  label: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+  onPress?: () => void;
+  destructive?: boolean;
+  isLast?: boolean;
+}) {
+  return (
+    <Pressable
+      style={[styles.settingsRow, !isLast && styles.settingsRowBorder]}
+      onPress={onPress}
+      disabled={!onPress && !right}>
+      <View style={styles.settingsLeft}>
+        <View style={[styles.settingsIcon, {backgroundColor: iconBg}]}>
+          {icon}
+        </View>
+        <View>
+          <Text
+            style={[
+              styles.settingsLabel,
+              destructive && styles.destructiveLabel,
+            ]}>
+            {label}
+          </Text>
+          {subtitle && <Text style={styles.settingsSubtitle}>{subtitle}</Text>}
+        </View>
+      </View>
+      <View style={styles.settingsRight}>
+        {right || (onPress && <ChevronRight size={14} color={palette.textDim} />)}
+      </View>
     </Pressable>
   );
 }
@@ -209,282 +354,260 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+
+  // Header
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    marginBottom: 24,
+    paddingHorizontal: 12,
+    paddingTop: 4,
+    paddingBottom: 24,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: palette.tileEmpty,
-    borderWidth: 1,
-    borderColor: palette.borderLight,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  backIcon: {
-    fontSize: 24,
-    color: palette.textPrimary,
+    marginRight: 8,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '600',
     color: palette.textPrimary,
   },
-  placeholder: {
-    width: 40,
-  },
-  profileSection: {
-    backgroundColor: palette.tileEmpty,
+
+  // Performance Card
+  performanceCard: {
+    backgroundColor: palette.card,
     borderWidth: 1,
-    borderColor: palette.borderLight,
-    borderRadius: 16,
+    borderColor: palette.cardBorder,
+    borderRadius: 20,
     padding: 24,
-    marginHorizontal: 16,
+    marginHorizontal: 20,
     marginBottom: 24,
-    alignItems: 'center',
   },
-  profileAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  profileAvatarText: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: palette.textPrimary,
-  },
-  profileName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: palette.textPrimary,
-    marginBottom: 8,
-  },
-  profileLevel: {
+  perfHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: palette.accentPurpleLight,
-    borderWidth: 1,
-    borderColor: palette.accentPurpleBorder,
-    borderRadius: 20,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 20,
   },
-  levelIcon: {
-    fontSize: 14,
-  },
-  levelText: {
-    fontSize: 14,
-    color: palette.accentPurple,
-    fontWeight: '500',
-  },
-  xpBar: {
-    width: '100%',
-    height: 8,
-    backgroundColor: palette.tileEmpty,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  xpFill: {
-    height: '100%',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  xpText: {
-    fontSize: 12,
-    color: palette.textDim,
-  },
-  tabNav: {
+  streakRow: {
     flexDirection: 'row',
-    gap: 8,
-    padding: 4,
-    backgroundColor: palette.tileEmpty,
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginBottom: 24,
+    alignItems: 'baseline',
+    gap: 6,
   },
-  tabBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
+  streakFire: {
+    fontSize: 24,
   },
-  tabBtnActive: {
-    backgroundColor: palette.accentPurpleLight,
-  },
-  tabBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: palette.textDim,
-  },
-  tabBtnTextActive: {
-    color: palette.accentPurple,
-  },
-  statsGrid: {
-    display: 'flex',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginHorizontal: 16,
-    marginBottom: 24,
-  },
-  statCard: {
-    backgroundColor: palette.tileEmpty,
-    borderWidth: 1,
-    borderColor: palette.borderLight,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    width: 'calc(50% - 6px)',
-    minWidth: 160,
-  },
-  statCardFeatured: {
-    width: '100%',
-    backgroundColor: palette.accentPurpleLight,
-    borderColor: palette.accentPurpleBorder,
-  },
-  statValue: {
-    fontSize: 32,
+  streakNumber: {
+    fontSize: 48,
     fontWeight: '700',
     color: palette.textPrimary,
-    marginBottom: 4,
+    letterSpacing: -2,
   },
-  streakValue: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: palette.warning,
-    marginBottom: 4,
+  streakLabel: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: palette.textMuted,
   },
-  statLabel: {
-    fontSize: 12,
+  bestCol: {
+    alignItems: 'flex-end',
+  },
+  bestLabel: {
+    fontSize: 11,
     color: palette.textDim,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  distributionSection: {
-    backgroundColor: palette.tileEmpty,
-    borderWidth: 1,
-    borderColor: palette.borderLight,
-    borderRadius: 16,
-    padding: 20,
-    marginHorizontal: 16,
-    marginBottom: 24,
+  bestValue: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: palette.textMuted,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    backgroundColor: palette.cardBorder,
+    borderRadius: 12,
+    gap: 1,
+  },
+  statCell: {
+    flex: 1,
+    backgroundColor: palette.card,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  statCellFirst: {
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
+  },
+  statCellLast: {
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+  },
+  statCellValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: palette.textPrimary,
+  },
+  statCellLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: palette.textDim,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginTop: 4,
+  },
+
+  // Section headers
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 14,
+  },
+  sectionHeaderTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: palette.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
-    marginBottom: 16,
-    color: palette.textSecondary,
+    color: palette.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginHorizontal: 20,
+    marginBottom: 10,
+    marginTop: 8,
   },
-  distributionRow: {
+
+  // Length picker
+  lengthPicker: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
+    backgroundColor: palette.card,
+    borderRadius: 8,
+    padding: 3,
+    gap: 2,
   },
-  distributionLabel: {
-    width: 20,
-    fontSize: 14,
-    color: palette.textDim,
-    textAlign: 'center',
-  },
-  distributionBarBg: {
-    flex: 1,
+  lengthOpt: {
+    width: 32,
     height: 28,
-    backgroundColor: palette.tileEmpty,
     borderRadius: 6,
-    overflow: 'hidden',
-  },
-  distributionBar: {
-    height: '100%',
-    borderRadius: 6,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'flex-end',
-    paddingRight: 8,
+  },
+  lengthOptActive: {
+    backgroundColor: palette.cardBorder,
+  },
+  lengthOptText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: palette.textDim,
+  },
+  lengthOptTextActive: {
+    color: palette.textPrimary,
+  },
+
+  // Distribution
+  distGrid: {
+    flexDirection: 'row',
+    gap: 6,
+    marginHorizontal: 20,
+    marginBottom: 32,
+  },
+  distCol: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 8,
+  },
+  distBarContainer: {
+    width: '100%',
+    height: 80,
+    backgroundColor: palette.card,
+    borderRadius: 8,
+    justifyContent: 'flex-end',
     overflow: 'hidden',
   },
-  distributionCount: {
+  distBar: {
+    width: '100%',
+    backgroundColor: palette.primary,
+    borderTopLeftRadius: 6,
+    borderTopRightRadius: 6,
+    alignItems: 'center',
+    paddingTop: 6,
+    minHeight: 0,
+  },
+  distBarBest: {
+    backgroundColor: palette.success,
+  },
+  distCount: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: palette.textPrimary,
+  },
+  distLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: palette.textPrimary,
-  },
-  placeholderView: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  placeholderText: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  placeholderTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: palette.textPrimary,
-    marginBottom: 8,
-  },
-  placeholderSubtitle: {
-    fontSize: 14,
     color: palette.textDim,
   },
-  menuSection: {
-    marginHorizontal: 16,
+
+  // Settings groups
+  settingsGroup: {
+    backgroundColor: palette.card,
+    borderRadius: 14,
+    marginHorizontal: 20,
     marginBottom: 24,
+    overflow: 'hidden',
   },
-  menuItem: {
+  settingsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: palette.tileEmpty,
-    borderWidth: 1,
-    borderColor: palette.borderLight,
-    borderRadius: 12,
-    marginBottom: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
-  menuItemLeft: {
+  settingsRowBorder: {
+    borderBottomWidth: 0.5,
+    borderBottomColor: palette.cardBorder,
+  },
+  settingsLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  menuIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: palette.accentPurpleLight,
+  settingsIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  menuIconText: {
-    fontSize: 20,
+  settingsLabel: {
+    fontSize: 16,
+    color: palette.textPrimary,
   },
-  menuText: {
-    gap: 2,
-  },
-  menuTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: palette.textSecondary,
-  },
-  menuSubtitle: {
+  settingsSubtitle: {
     fontSize: 12,
     color: palette.textDim,
+    marginTop: 1,
   },
-  menuArrow: {
-    fontSize: 24,
-    color: palette.keyAction,
+  settingsRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  bottomSpacing: {
-    height: 40,
+  destructiveLabel: {
+    color: palette.destructive,
+  },
+
+  // Footer
+  versionFooter: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: palette.textDim,
+    paddingVertical: 16,
   },
 });
