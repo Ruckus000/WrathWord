@@ -42,6 +42,7 @@ import {
   getResultTitle,
 } from '../logic/shareResult';
 import Header from '../components/Header';
+import {NewGameModal, GameConfig} from '../components/NewGameModal';
 import {palette} from '../theme/colors';
 import LinearGradient from 'react-native-linear-gradient';
 
@@ -72,10 +73,6 @@ export default function GameScreen({onNavigateToStats}: Props) {
   const [errorMsg, setErrorMsg] = useState<string>('');
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
-  // Pending settings (for sheet)
-  const [pendingLength, setPendingLength] = useState<number>(length);
-  const [pendingMaxRows, setPendingMaxRows] = useState<number>(maxRows);
-  const [pendingMode, setPendingMode] = useState<Mode>(mode);
 
   // Load wordlists per length (static require map to satisfy Metro)
   const LISTS: Record<number, {answers: string[]; allowed: string[]}> = {
@@ -159,9 +156,6 @@ export default function GameScreen({onNavigateToStats}: Props) {
         setLength(5);
         setMaxRows(6);
         setMode('daily');
-        setPendingLength(5);
-        setPendingMaxRows(6);
-        setPendingMode('daily');
         // Do not restore saved progress or auto-start; user will press Start Game
         return;
       }
@@ -321,21 +315,17 @@ export default function GameScreen({onNavigateToStats}: Props) {
   }, [feedback, rows]);
 
   const handleNewGame = useCallback(() => {
-    setPendingLength(length);
-    setPendingMaxRows(maxRows);
-    setPendingMode(mode);
     setShowSettings(true);
-  }, [length, maxRows, mode]);
+  }, []);
 
-  const handleStartGame = useCallback(() => {
-    setLength(pendingLength);
-    setMaxRows(pendingMaxRows);
-    setMode(pendingMode);
+  const handleNewGameStart = useCallback((config: GameConfig) => {
+    setLength(config.length);
+    setMaxRows(config.maxRows);
+    setMode(config.mode);
     setShowSettings(false);
     setJSON('app.hasLaunched', true);
-    // Pass the new settings directly to loadNew to avoid state update race condition
-    loadNew(undefined, pendingMode, pendingLength, pendingMaxRows);
-  }, [pendingLength, pendingMaxRows, pendingMode, loadNew]);
+    loadNew(undefined, config.mode, config.length, config.maxRows);
+  }, [loadNew]);
 
   const handleCancel = useCallback(async () => {
     // On first launch, cancel should auto-start a sensible default without extra prompts
@@ -417,80 +407,13 @@ export default function GameScreen({onNavigateToStats}: Props) {
       <Keyboard onKey={onKey} keyStates={keyStates} />
 
       {/* Settings sheet */}
-      <Modal transparent visible={showSettings} animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <Pressable
-            style={styles.backdropPress}
-            onPress={() => setShowSettings(false)}
-          />
-          <View style={styles.settingsSheet}>
-            {/* Header */}
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Start New Game</Text>
-              <Text style={styles.sheetDescription}>Configure your game settings below</Text>
-              {gameInProgress && (
-                <View style={styles.warningBadge}>
-                  <Text style={styles.warningBadgeText}>⚠️ Current progress will be lost</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Content */}
-            <View style={styles.sheetContent}>
-              <View style={styles.settingGroup}>
-                <Text style={styles.settingLabel}>Word Length</Text>
-                <Segment
-                  value={pendingLength}
-                  onChange={setPendingLength}
-                  options={[2, 3, 4, 5, 6]}
-                />
-              </View>
-
-              <View style={styles.settingGroup}>
-                <Text style={styles.settingLabel}>Maximum Guesses</Text>
-                <Segment
-                  value={pendingMaxRows}
-                  onChange={setPendingMaxRows}
-                  options={[4, 5, 6, 7, 8]}
-                />
-              </View>
-
-              <View style={styles.settingGroup}>
-                <Text style={styles.settingLabel}>Game Mode</Text>
-                <Text style={styles.settingHint}>Choose between daily puzzle or random word</Text>
-                <View style={styles.radioGroup}>
-                  <RadioCard
-                    icon="📅"
-                    label="Daily Challenge"
-                    description="Same puzzle for everyone today"
-                    selected={pendingMode === 'daily'}
-                    onPress={() => setPendingMode('daily')}
-                  />
-                  <RadioCard
-                    icon="🎲"
-                    label="Free Play"
-                    description="Random word, play unlimited"
-                    selected={pendingMode === 'free'}
-                    onPress={() => setPendingMode('free')}
-                  />
-                </View>
-              </View>
-            </View>
-
-            {/* Footer */}
-            <View style={styles.sheetFooter}>
-              <Pressable
-                style={styles.cancelBtn}
-                onPress={handleCancel}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </Pressable>
-              <Pressable style={styles.startBtn} onPress={handleStartGame}>
-                <Text style={styles.startBtnText}>Start Game</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <NewGameModal
+        visible={showSettings}
+        initialConfig={{length, maxRows, mode}}
+        gameInProgress={gameInProgress}
+        onStart={handleNewGameStart}
+        onCancel={handleCancel}
+      />
 
       {/* Result modal */}
       <Modal transparent visible={showResult} animationType="fade">
@@ -621,88 +544,6 @@ export default function GameScreen({onNavigateToStats}: Props) {
 }
 
 /** UI bits (kept here to stay single-screen). Memoize to reduce re-renders. */
-const RadioCard = React.memo(
-  ({
-    icon,
-    label,
-    description,
-    selected,
-    onPress,
-  }: {
-    icon: string;
-    label: string;
-    description: string;
-    selected: boolean;
-    onPress: () => void;
-  }) => (
-    <Pressable
-      style={[
-        styles.radioCard,
-        selected && styles.radioCardSelected,
-      ]}
-      onPress={onPress}
-      accessibilityRole="radio"
-      accessibilityState={{checked: selected}}>
-      <View style={[
-        styles.radioCircle,
-        selected && styles.radioCircleSelected,
-      ]}>
-        {selected && <View style={styles.radioCircleInner} />}
-      </View>
-      <View style={styles.radioContent}>
-        <Text style={styles.radioIcon}>{icon}</Text>
-        <View style={styles.radioTextContent}>
-          <Text style={[
-            styles.radioLabel,
-            selected && styles.radioLabelSelected,
-          ]}>{label}</Text>
-          <Text style={[
-            styles.radioDescription,
-            selected && styles.radioDescriptionSelected,
-          ]}>{description}</Text>
-        </View>
-      </View>
-    </Pressable>
-  ),
-);
-
-const Segment = React.memo(
-  ({
-    value,
-    onChange,
-    options,
-  }: {
-    value: number;
-    onChange: (v: number) => void;
-    options?: number[];
-  }) => {
-    const opts = options ?? [2, 3, 4, 5, 6];
-    return (
-      <View style={styles.segment}>
-        {opts.map(n => (
-          <Pressable
-            key={n}
-            onPress={() => onChange(n)}
-            style={[
-              styles.segmentItem,
-              value === n && styles.segmentItemActive,
-            ]}
-            accessibilityRole="button"
-            accessibilityState={{selected: value === n}}>
-            <Text
-              style={[
-                styles.segmentText,
-                value === n && styles.segmentTextActive,
-              ]}>
-              {n}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-    );
-  },
-);
-
 const Board = React.memo(
   ({
     length,
@@ -935,20 +776,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#e4e4e7',
   },
-  menuBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#18181b',
-    borderWidth: 1,
-    borderColor: '#27272a',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  menuBtnText: {
-    fontSize: 20,
-    color: '#e4e4e7',
-  },
   quizTypeBadge: {
     backgroundColor: '#18181b',
     borderWidth: 1,
@@ -1001,43 +828,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  segment: {
-    flexDirection: 'row',
-    backgroundColor: '#18181b',
-    borderColor: '#27272a',
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 3,
-    gap: 2,
-  },
-  segmentItem: {
-    flex: 1,
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  segmentItemActive: {
-    backgroundColor: '#27272a',
-    borderColor: '#3f3f46',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  segmentText: {color: '#a1a1aa', fontWeight: '500', fontSize: 14, textAlign: 'center'},
-  segmentTextActive: {color: '#fafafa', fontWeight: '500'},
-  newBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: '#3f3f46',
-  },
-  newBtnText: {color: '#a1a1aa', fontWeight: '600', fontSize: 15},
 
   board: {flex: 1, justifyContent: 'center', gap: 8, paddingVertical: 12},
   row: {flexDirection: 'row', gap: 8, alignSelf: 'center'},
@@ -1107,185 +897,6 @@ const styles = StyleSheet.create({
     backgroundColor: palette.overlay,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  backdropPress: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  settingsSheet: {
-    width: '90%',
-    maxWidth: 420,
-    backgroundColor: '#09090b',
-    borderColor: '#27272a',
-    borderWidth: 1,
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 25},
-    shadowOpacity: 0.5,
-    shadowRadius: 50,
-    elevation: 24,
-  },
-  sheetHeader: {
-    paddingTop: 24,
-    paddingHorizontal: 24,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#27272a',
-  },
-  sheetTitle: {
-    color: '#fafafa',
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 4,
-    letterSpacing: -0.2,
-  },
-  sheetDescription: {
-    color: '#a1a1aa',
-    fontSize: 14,
-    fontWeight: '400',
-    lineHeight: 20,
-  },
-  warningBadge: {
-    marginTop: 12,
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(251, 191, 36, 0.1)',
-    borderColor: 'rgba(251, 191, 36, 0.2)',
-    borderWidth: 1,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-  },
-  warningBadgeText: {
-    color: '#fbbf24',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  sheetContent: {
-    padding: 24,
-    gap: 24,
-  },
-  settingGroup: {
-    gap: 12,
-  },
-  settingLabel: {
-    color: '#fafafa',
-    fontSize: 14,
-    fontWeight: '500',
-    letterSpacing: -0.2,
-  },
-  settingHint: {
-    color: '#71717a',
-    fontSize: 13,
-    fontWeight: '400',
-    marginTop: -8,
-  },
-  radioGroup: {
-    gap: 10,
-  },
-  radioCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    backgroundColor: '#18181b',
-    borderColor: '#27272a',
-    borderWidth: 1.5,
-    borderRadius: 8,
-  },
-  radioCardSelected: {
-    borderColor: '#3b82f6',
-    backgroundColor: 'rgba(59, 130, 246, 0.05)',
-  },
-  radioCircle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: '#52525b',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioCircleSelected: {
-    borderColor: '#3b82f6',
-    backgroundColor: '#3b82f6',
-  },
-  radioCircleInner: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#fff',
-  },
-  radioContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  radioIcon: {
-    fontSize: 22,
-  },
-  radioTextContent: {
-    flex: 1,
-  },
-  radioLabel: {
-    color: '#fafafa',
-    fontSize: 15,
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  radioLabelSelected: {
-    color: '#fafafa',
-  },
-  radioDescription: {
-    color: '#71717a',
-    fontSize: 13,
-    fontWeight: '400',
-  },
-  radioDescriptionSelected: {
-    color: '#a1a1aa',
-  },
-  sheetFooter: {
-    flexDirection: 'row',
-    gap: 10,
-    padding: 16,
-    paddingHorizontal: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#27272a',
-    backgroundColor: '#0a0a0b',
-  },
-  cancelBtn: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    borderColor: '#27272a',
-    borderWidth: 1.5,
-    paddingVertical: 11,
-    borderRadius: 7,
-    alignItems: 'center',
-  },
-  cancelBtnText: {
-    color: '#fafafa',
-    fontSize: 14,
-    fontWeight: '500',
-    letterSpacing: -0.2,
-  },
-  startBtn: {
-    flex: 1,
-    backgroundColor: '#3b82f6',
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-    paddingVertical: 11,
-    borderRadius: 7,
-    alignItems: 'center',
-  },
-  startBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-    letterSpacing: -0.2,
   },
   // Result Modal Styles (from HTML design)
   resultModalCard: {
