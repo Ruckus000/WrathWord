@@ -67,15 +67,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingVertical: 16,
     minHeight: 60,
-    position: 'relative',
   },
   headerLeft: {
     position: 'absolute',
-<<<<<<< HEAD
     left: 20,
-=======
-    left: 0,
->>>>>>> origin/fix/worktree-changes
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -99,10 +94,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-<<<<<<< HEAD
-    justifyContent: 'center',
-=======
->>>>>>> origin/fix/worktree-changes
   },
   modeIndicator: {
     flexDirection: 'row',
@@ -147,11 +138,7 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     position: 'absolute',
-<<<<<<< HEAD
     right: 20,
-=======
-    right: 0,
->>>>>>> origin/fix/worktree-changes
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
