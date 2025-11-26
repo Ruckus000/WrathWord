@@ -20,7 +20,14 @@ target 'WrathWord' do
   use_react_native!(
     :path => config[:reactNativePath],
     # An absolute path to your application root.
-    :app_path => "#{Pod::Config.instance.installation_root}/.."
+    :app_path => "#{Pod::Config.instance.installation_root}/..",
+    # IMPORTANT: Legacy Architecture is REQUIRED for this project.
+    # DO NOT set to true without:
+    #   1. Upgrading react-native-mmkv to 3.x (2.x doesn't support TurboModules)
+    #   2. Verifying all other dependencies support New Architecture
+    #   3. Configuring Expo modules if using expo-haptics
+    # See README.md "Technical Notes" for details.
+    :new_arch_enabled => false
   )
 
   post_install do |installer|
@@ -51,6 +58,46 @@ target 'WrathWord' do
             config.build_settings['OTHER_LDFLAGS'] = flags.uniq
           elsif flags.is_a?(String)
             config.build_settings['OTHER_LDFLAGS'] = flags.split.uniq.join(' ')
+          end
+        end
+
+        # Suppress glog syscall deprecation warnings
+        if target.name == 'glog'
+          config.build_settings['GCC_WARN_DEPRECATED_FUNCTIONS'] = 'NO'
+          # Add warning suppression flags
+          ['WARNING_CFLAGS', 'OTHER_CFLAGS'].each do |flag_name|
+            flags = config.build_settings[flag_name]
+            if flags.is_a?(Array)
+              flags = flags.dup
+              flags << '-Wno-deprecated-declarations' unless flags.include?('-Wno-deprecated-declarations')
+              config.build_settings[flag_name] = flags
+            elsif flags.is_a?(String)
+              config.build_settings[flag_name] = "#{flags} -Wno-deprecated-declarations" unless flags.include?('-Wno-deprecated-declarations')
+            else
+              config.build_settings[flag_name] = ['$(inherited)', '-Wno-deprecated-declarations']
+            end
+          end
+        end
+
+        # Suppress React Native bridge deprecation warnings
+        if target.name.start_with?('React-')
+          config.build_settings['GCC_WARN_DEPRECATED_DECLARATIONS'] = 'NO'
+        end
+      end
+    end
+
+    # Fix Hermes script phase output dependencies warning
+    installer.pods_project.targets.each do |target|
+      if target.name == 'hermes-engine'
+        target.build_phases.each do |phase|
+          if phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase) &&
+             phase.name&.include?('[Hermes] Replace Hermes')
+            # Add output file to prevent "will be run during every build" warning
+            if phase.output_paths.nil? || phase.output_paths.empty?
+              phase.output_paths = [
+                "${PODS_ROOT}/hermes-engine/destroot/Library/Frameworks/universal/hermes.xcframework"
+              ]
+            end
           end
         end
       end
