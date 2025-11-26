@@ -24,7 +24,7 @@ import {
   ScrollView,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import Haptic from 'react-native-haptic-feedback';
+import {triggerImpact, triggerNotification} from '../utils/haptics';
 import {evaluateGuess, TileState} from '../logic/evaluateGuess';
 import {selectDaily} from '../logic/selectDaily';
 import {getJSON, setJSON} from '../storage/mmkv';
@@ -206,7 +206,7 @@ export default function GameScreen({onNavigateToStats}: Props) {
 
   const showError = useCallback((msg: string) => {
     setErrorMsg(msg);
-    Haptic.trigger('notificationError');
+    triggerNotification('Error');
     AccessibilityInfo.announceForAccessibility?.(msg);
 
     // Shake animation
@@ -240,13 +240,13 @@ export default function GameScreen({onNavigateToStats}: Props) {
     setRows(r => [...r, current.toUpperCase()]);
     setFeedback(f => [...f, fb]);
     setCurrent('');
-    Haptic.trigger('impactMedium');
+    triggerImpact('Medium');
 
     const won = fb.every(s => s === 'correct');
     if (won) {
       setStatus('won');
       setShowResult(true);
-      Haptic.trigger('notificationSuccess');
+      triggerNotification('Success');
       AccessibilityInfo.announceForAccessibility?.('You win!');
 
       // Record win stats
@@ -269,7 +269,7 @@ export default function GameScreen({onNavigateToStats}: Props) {
     } else if (rows.length + 1 >= maxRows) {
       setStatus('lost');
       setShowResult(true);
-      Haptic.trigger('notificationWarning');
+      triggerNotification('Warning');
       AccessibilityInfo.announceForAccessibility?.(
         `You lose. The word was ${answer.toUpperCase()}`,
       );
@@ -913,12 +913,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 16,
+    paddingVertical: 8,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 10,
+  },
+  menuBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#18181b',
+    borderWidth: 1,
+    borderColor: '#27272a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuBtnText: {
+    fontSize: 20,
+    color: '#e4e4e7',
   },
   menuBtn: {
     width: 40,
@@ -938,16 +953,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#18181b',
     borderWidth: 1,
     borderColor: '#27272a',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 7,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   quizTypeText: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     color: '#e4e4e7',
   },
   quizTypeDivider: {
@@ -964,13 +979,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#18181b',
     borderWidth: 1,
     borderColor: '#27272a',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 7,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
   },
   configSize: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     color: '#e4e4e7',
   },
   errorContainer: {
@@ -1015,14 +1030,14 @@ const styles = StyleSheet.create({
   segmentText: {color: '#a1a1aa', fontWeight: '500', fontSize: 14, textAlign: 'center'},
   segmentTextActive: {color: '#fafafa', fontWeight: '500'},
   newBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
     backgroundColor: 'transparent',
     borderWidth: 1.5,
     borderColor: '#3f3f46',
   },
-  newBtnText: {color: '#a1a1aa', fontWeight: '500', fontSize: 14},
+  newBtnText: {color: '#a1a1aa', fontWeight: '600', fontSize: 15},
 
   board: {flex: 1, justifyContent: 'center', gap: 8, paddingVertical: 12},
   row: {flexDirection: 'row', gap: 8, alignSelf: 'center'},

@@ -63,6 +63,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
     paddingHorizontal: 0,
     paddingVertical: 16,
     minHeight: 60,
@@ -70,7 +71,11 @@ const styles = StyleSheet.create({
   },
   headerLeft: {
     position: 'absolute',
+<<<<<<< HEAD
     left: 20,
+=======
+    left: 0,
+>>>>>>> origin/fix/worktree-changes
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -92,8 +97,12 @@ const styles = StyleSheet.create({
   gameInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     justifyContent: 'center',
+    gap: 8,
+<<<<<<< HEAD
+    justifyContent: 'center',
+=======
+>>>>>>> origin/fix/worktree-changes
   },
   modeIndicator: {
     flexDirection: 'row',
@@ -105,7 +114,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.borderLight,
     borderRadius: 20,
-    flexShrink: 1,
   },
   modeIndicatorFree: {
     // Could have different styling for free mode
@@ -131,7 +139,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.accentPurpleBorder,
     borderRadius: 8,
-    flexShrink: 1,
   },
   configText: {
     fontSize: 14,
@@ -140,7 +147,11 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     position: 'absolute',
+<<<<<<< HEAD
     right: 20,
+=======
+    right: 0,
+>>>>>>> origin/fix/worktree-changes
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,

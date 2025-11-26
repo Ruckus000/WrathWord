@@ -1,4 +1,28 @@
 {
   "name": "WrathWord",
-  "displayName": "WrathWord"
+  "expo": {
+    "name": "WrathWord",
+    "slug": "wrathword",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a2e"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.wrathword.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#1a1a2e"
+      },
+      "package": "com.wrathword.app"
+    },
+    "newArchEnabled": false
+  }
 }
