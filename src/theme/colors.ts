@@ -46,4 +46,28 @@ export const palette = {
   overlay: 'rgba(0, 0, 0, 0.7)',
   card: '#1c1c1e',
   cardBorder: '#2c2c2e',
+  cardHighlight: '#1f1f23',
+
+  // Elevated backgrounds
+  bgElevated: '#0f0f11',
+
+  // Rank colors
+  gold: '#fbbf24',
+  goldEnd: '#f59e0b',
+  silver: '#94a3b8',
+  bronze: '#d97706',
+
+  // Success variants
+  successDim: 'rgba(34, 197, 94, 0.1)',
+  successBorder: 'rgba(34, 197, 94, 0.25)',
+
+  // Avatar gradients
+  avatarPurpleStart: '#6366f1',
+  avatarPurpleEnd: '#8b5cf6',
+  avatarBlueStart: '#3b82f6',
+  avatarBlueEnd: '#60a5fa',
+
+  // Streak
+  streakOrange: '#fb923c',
+  streakBg: 'rgba(251, 146, 60, 0.12)',
 };

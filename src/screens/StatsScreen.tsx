@@ -29,12 +29,14 @@ import {
   ChatIcon,
   TrashIcon,
 } from '../components/icons/SettingsIcons';
+import CompeteCard from '../components/CompeteCard';
 
 type Props = {
   onBack: () => void;
+  onNavigateToFriends?: () => void;
 };
 
-export default function StatsScreen({onBack}: Props) {
+export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
   const insets = useSafeAreaInsets();
   const profile = getProfile();
 
@@ -127,6 +129,21 @@ export default function StatsScreen({onBack}: Props) {
             <StatCell value={`${totalStats.winRate}%`} label="Win Rate" isLast />
           </View>
         </View>
+
+        {/* Compete Card */}
+        {onNavigateToFriends && (
+          <CompeteCard
+            userRank={2}
+            totalPlayed={5}
+            waitingCount={3}
+            topFriends={[
+              {id: '1', name: 'Sarah', letter: 'S', isFirst: true},
+              {id: 'you', name: 'You', letter: 'W', isYou: true},
+              {id: '2', name: 'Mike', letter: 'M'},
+            ]}
+            onPress={onNavigateToFriends}
+          />
+        )}
 
         {/* Distribution Section */}
         <View style={styles.sectionHeader}>
