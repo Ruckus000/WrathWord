@@ -70,4 +70,8 @@ export const palette = {
   // Streak
   streakOrange: '#fb923c',
   streakBg: 'rgba(251, 146, 60, 0.12)',
+
+  // High Contrast variants (colorblind-friendly)
+  correctHighContrast: '#f5793a', // Orange
+  presentHighContrast: '#85c0f9', // Light blue
 };

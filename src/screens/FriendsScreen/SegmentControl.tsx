@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
     color: palette.textMuted,
   },
   textActive: {
-    color: palette.textPrimary,
+    color: palette.primary,
     fontWeight: '600',
   },
 });

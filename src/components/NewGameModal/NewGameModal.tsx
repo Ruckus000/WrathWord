@@ -1,5 +1,6 @@
 import React, {useState, useCallback, useEffect} from 'react';
 import {View, Text, Pressable, Modal, StyleSheet} from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import {BoardPreview} from './BoardPreview';
 import {PillSelector} from './PillSelector';
 import {ModeCard} from './ModeCard';
@@ -43,7 +44,7 @@ export function NewGameModal({
           {gameInProgress && (
             <View style={styles.warningBar}>
               <Text style={styles.warningText}>
-                ⚠️ Current progress will be lost
+                ⚠️ Current game will be lost
               </Text>
             </View>
           )}
@@ -104,8 +105,14 @@ export function NewGameModal({
             <Pressable style={styles.btnCancel} onPress={onCancel}>
               <Text style={styles.btnCancelText}>Cancel</Text>
             </Pressable>
-            <Pressable style={styles.btnStart} onPress={handleStart}>
-              <Text style={styles.btnStartText}>Start Game</Text>
+            <Pressable style={styles.btnStartWrapper} onPress={handleStart}>
+              <LinearGradient
+                colors={['#6366f1', '#8b5cf6']}
+                start={{x: 0, y: 0}}
+                end={{x: 1, y: 1}}
+                style={styles.btnStart}>
+                <Text style={styles.btnStartText}>Start Game</Text>
+              </LinearGradient>
             </Pressable>
           </View>
         </View>
@@ -131,11 +138,11 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    maxWidth: 420,
-    backgroundColor: '#09090b',
-    borderRadius: 16,
+    maxWidth: 340,
+    backgroundColor: '#1c1c1e',
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#27272a',
+    borderColor: '#2c2c2e',
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 25},
@@ -159,17 +166,18 @@ const styles = StyleSheet.create({
     color: '#fbbf24',
   },
   content: {
-    padding: 24,
-    gap: 24,
+    padding: 20,
+    paddingTop: 0,
+    paddingHorizontal: 24,
   },
   settingGroup: {
-    gap: 12,
+    marginBottom: 20,
   },
   settingLabel: {
     color: '#fafafa',
     fontSize: 14,
-    fontWeight: '500',
-    letterSpacing: -0.2,
+    fontWeight: '600',
+    marginBottom: 10,
   },
   modeRow: {
     flexDirection: 'row',
@@ -178,41 +186,40 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     gap: 10,
-    padding: 16,
     paddingHorizontal: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#27272a',
-    backgroundColor: '#0a0a0b',
+    paddingBottom: 24,
   },
   btnCancel: {
     flex: 1,
-    backgroundColor: 'transparent',
-    borderColor: '#27272a',
-    borderWidth: 1.5,
-    paddingVertical: 14,
-    borderRadius: 10,
+    backgroundColor: '#27272a',
+    paddingVertical: 16,
+    borderRadius: 14,
     alignItems: 'center',
   },
   btnCancelText: {
-    color: '#fafafa',
-    fontSize: 15,
-    fontWeight: '500',
+    color: '#a1a1aa',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  btnStart: {
+  btnStartWrapper: {
     flex: 1,
-    backgroundColor: '#3b82f6',
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-    shadowColor: '#3b82f6',
+    borderRadius: 14,
+    overflow: 'hidden',
+    // Shadow for the purple glow
+    shadowColor: '#6366f1',
     shadowOffset: {width: 0, height: 4},
     shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowRadius: 14,
     elevation: 4,
+  },
+  btnStart: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderRadius: 14,
   },
   btnStartText: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
   },
 });

@@ -16,6 +16,8 @@ import {
   resetStats,
   updatePreferences,
 } from '../storage/profile';
+import {profileService} from '../services/data';
+import {useAuth} from '../contexts/AuthContext';
 import {palette} from '../theme/colors';
 import {Toggle} from '../components/Toggle';
 import {
@@ -38,6 +40,7 @@ type Props = {
 
 export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
   const insets = useSafeAreaInsets();
+  const {isAuthenticated, isDevelopmentMode, user, signOut} = useAuth();
   const profile = getProfile();
 
   const [selectedLength, setSelectedLength] = useState(
@@ -91,6 +94,33 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
         },
       ],
     );
+  };
+
+  const handleSyncStats = async () => {
+    if (!isAuthenticated) {
+      Alert.alert('Not Signed In', 'Please sign in to sync your statistics.');
+      return;
+    }
+
+    try {
+      await profileService.syncStats();
+      Alert.alert('Success', 'Your statistics have been synced to the cloud.');
+    } catch (err) {
+      Alert.alert('Error', 'Failed to sync statistics. Please try again.');
+    }
+  };
+
+  const handleSignOut = async () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          await signOut();
+        },
+      },
+    ]);
   };
 
   return (
@@ -209,14 +239,47 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
         {/* Account Section */}
         <Text style={styles.sectionTitle}>Account</Text>
         <View style={styles.settingsGroup}>
-          <SettingsRow
-            icon={<UserIcon size={18} />}
-            iconBg={palette.primary}
-            label="Sign In"
-            subtitle="Sync progress"
-            onPress={() => {}}
-            isLast
-          />
+          {!isAuthenticated && !isDevelopmentMode ? (
+            <SettingsRow
+              icon={<UserIcon size={18} />}
+              iconBg={palette.primary}
+              label="Sign In"
+              subtitle="Sync progress across devices"
+              onPress={() => {}}
+              isLast
+            />
+          ) : (
+            <>
+              {isAuthenticated && (
+                <SettingsRow
+                  icon={<UserIcon size={18} />}
+                  iconBg={palette.primary}
+                  label={user?.username || user?.email || 'Account'}
+                  subtitle="Signed in"
+                  onPress={handleSignOut}
+                />
+              )}
+              {isDevelopmentMode && (
+                <SettingsRow
+                  icon={<UserIcon size={18} />}
+                  iconBg={palette.textDim}
+                  label="Dev Mode Active"
+                  subtitle="Using local data only"
+                  isLast={!isAuthenticated}
+                />
+              )}
+              {isAuthenticated && (
+                <SettingsRow
+                  icon={<DocumentIcon size={18} />}
+                  iconBg={palette.success}
+                  label="Sync Stats"
+                  subtitle="Upload to cloud"
+                  onPress={handleSyncStats}
+                  isLast
+                />
+              )}
+            </>
+          )}
         </View>
 
         {/* About Section */}

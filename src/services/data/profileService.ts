@@ -1,0 +1,197 @@
+/**
+ * Profile Service
+ * 
+ * Handles user profile and game statistics.
+ * Routes to appropriate implementation based on environment mode.
+ */
+
+import {isDevelopment} from '../../config/environment';
+import {supabase} from '../supabase/client';
+import {
+  UserProfile,
+  LengthStats,
+  getProfile as getLocalProfile,
+  saveProfile as saveLocalProfile,
+  updatePreferences as updateLocalPreferences,
+  recordGameResult as recordLocalGameResult,
+  getStatsForLength as getLocalStatsForLength,
+  getTotalStats as getLocalTotalStats,
+  UserPreferences,
+} from '../../storage/profile';
+
+export interface IProfileService {
+  getProfile(): Promise<UserProfile>;
+  updateProfile(updates: Partial<UserProfile>): Promise<void>;
+  updatePreferences(prefs: Partial<UserPreferences>): Promise<void>;
+  syncStats(): Promise<void>;
+  getStatsForLength(length: number): Promise<LengthStats>;
+  getTotalStats(): Promise<{
+    played: number;
+    won: number;
+    winRate: number;
+    currentStreak: number;
+    maxStreak: number;
+  }>;
+}
+
+/**
+ * Mock Profile Service (Dev Mode)
+ * Uses local MMKV storage
+ */
+class MockProfileService implements IProfileService {
+  async getProfile(): Promise<UserProfile> {
+    return getLocalProfile();
+  }
+
+  async updateProfile(updates: Partial<UserProfile>): Promise<void> {
+    const profile = getLocalProfile();
+    saveLocalProfile({...profile, ...updates});
+  }
+
+  async updatePreferences(prefs: Partial<UserPreferences>): Promise<void> {
+    updateLocalPreferences(prefs);
+  }
+
+  async syncStats(): Promise<void> {
+    // No-op in dev mode - everything is already local
+  }
+
+  async getStatsForLength(length: number): Promise<LengthStats> {
+    return getLocalStatsForLength(length);
+  }
+
+  async getTotalStats() {
+    return getLocalTotalStats();
+  }
+}
+
+/**
+ * Supabase Profile Service (Prod Mode)
+ * Syncs with Supabase backend
+ */
+class SupabaseProfileService implements IProfileService {
+  async getProfile(): Promise<UserProfile> {
+    if (!supabase) {
+      return getLocalProfile();
+    }
+
+    try {
+      const {data: {user}} = await supabase.auth.getUser();
+      if (!user) {
+        return getLocalProfile();
+      }
+
+      // Try to fetch from Supabase
+      const {data: profile, error} = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error || !profile) {
+        return getLocalProfile();
+      }
+
+      // Merge with local profile structure
+      const localProfile = getLocalProfile();
+      return {
+        ...localProfile,
+        id: profile.user_id,
+      };
+    } catch {
+      return getLocalProfile();
+    }
+  }
+
+  async updateProfile(updates: Partial<UserProfile>): Promise<void> {
+    const profile = getLocalProfile();
+    saveLocalProfile({...profile, ...updates});
+
+    if (!supabase) {
+      return;
+    }
+
+    try {
+      const {data: {user}} = await supabase.auth.getUser();
+      if (!user) {
+        return;
+      }
+
+      // Update in Supabase
+      await supabase
+        .from('profiles')
+        .update({
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id);
+    } catch {
+      // Fail silently - local is source of truth
+    }
+  }
+
+  async updatePreferences(prefs: Partial<UserPreferences>): Promise<void> {
+    updateLocalPreferences(prefs);
+  }
+
+  async syncStats(): Promise<void> {
+    if (!supabase) {
+      return;
+    }
+
+    try {
+      const {data: {user}} = await supabase.auth.getUser();
+      if (!user) {
+        return;
+      }
+
+      const localProfile = getLocalProfile();
+
+      // Sync each word length
+      for (const length of [2, 3, 4, 5, 6]) {
+        const stats = localProfile.stats[length];
+        if (!stats) {
+          continue;
+        }
+
+        // Upsert stats to Supabase
+        await supabase.from('game_stats').upsert({
+          user_id: user.id,
+          word_length: length,
+          games_played: stats.gamesPlayed,
+          games_won: stats.gamesWon,
+          current_streak: stats.currentStreak,
+          max_streak: stats.maxStreak,
+          guess_distribution: stats.guessDistribution,
+          used_words: stats.usedWords,
+          current_cycle: stats.currentCycle,
+          last_played_date: stats.lastPlayedDate,
+          updated_at: new Date().toISOString(),
+        });
+      }
+    } catch (err) {
+      console.error('Failed to sync stats:', err);
+    }
+  }
+
+  async getStatsForLength(length: number): Promise<LengthStats> {
+    return getLocalStatsForLength(length);
+  }
+
+  async getTotalStats() {
+    return getLocalTotalStats();
+  }
+}
+
+/**
+ * Get the appropriate profile service based on environment
+ */
+export function getProfileService(): IProfileService {
+  return isDevelopment
+    ? new MockProfileService()
+    : new SupabaseProfileService();
+}
+
+export const profileService = getProfileService();
+
+
+

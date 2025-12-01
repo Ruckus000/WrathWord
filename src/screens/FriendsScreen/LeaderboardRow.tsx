@@ -11,6 +11,7 @@ type Props = {
   period: Period;
   userPlayedToday: boolean;
   isYou?: boolean;
+  isFriend?: boolean;
   onPress: () => void;
 };
 
@@ -20,6 +21,7 @@ export default function LeaderboardRow({
   period,
   userPlayedToday,
   isYou,
+  isFriend = false,
   onPress,
 }: Props) {
   const isInactive = friend.lastPlayed === 'inactive';
@@ -36,6 +38,7 @@ export default function LeaderboardRow({
         styles.row,
         isInactive && styles.rowInactive,
         isYou && styles.rowYou,
+        isFriend && styles.rowFriend,
       ]}
       onPress={onPress}>
       {/* Rank */}
@@ -114,6 +117,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(59, 130, 246, 0.08)',
     borderLeftWidth: 3,
     borderLeftColor: palette.primary,
+    paddingLeft: 13,
+  },
+  rowFriend: {
+    borderLeftWidth: 3,
+    borderLeftColor: palette.success,
     paddingLeft: 13,
   },
   rank: {

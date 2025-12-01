@@ -1,17 +1,20 @@
-import React, {useState, useCallback} from 'react';
-import {View, Text, StyleSheet, Pressable, ScrollView} from 'react-native';
+import React, {useState, useCallback, useEffect} from 'react';
+import {View, Text, StyleSheet, Pressable, ActivityIndicator} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {palette} from '../../theme/colors';
 import {ChevronLeft, PlusIcon} from '../../components/icons/SettingsIcons';
-import {MOCK_FRIENDS, MOCK_USER, Friend} from '../../data/mockFriends';
+import {MOCK_USER, Friend} from '../../data/mockFriends';
+import {friendsService} from '../../services/data';
 
 import SegmentControl, {Period} from './SegmentControl';
+import {Scope} from './ScopeToggle';
 import TodayCard from './TodayCard';
 import NotPlayedCard from './NotPlayedCard';
 import AllTimeCard from './AllTimeCard';
 import WeekCard from './WeekCard';
 import Leaderboard from './Leaderboard';
 import HeadToHeadModal from './HeadToHeadModal';
+import AddFriendsModal from './AddFriendsModal';
 
 type Props = {
   onBack: () => void;
@@ -26,8 +29,29 @@ export default function FriendsScreen({
 }: Props) {
   const insets = useSafeAreaInsets();
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('today');
+  const [selectedScope, setSelectedScope] = useState<Scope>('global');
   const [showH2H, setShowH2H] = useState(false);
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
+  const [showAddFriends, setShowAddFriends] = useState(false);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Load friends on mount
+  useEffect(() => {
+    loadFriends();
+  }, []);
+
+  const loadFriends = async () => {
+    setLoading(true);
+    try {
+      const friendsData = await friendsService.getFriends();
+      setFriends(friendsData);
+    } catch (err) {
+      console.error('Failed to load friends:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleFriendPress = useCallback((friend: Friend) => {
     setSelectedFriend(friend);
@@ -40,8 +64,8 @@ export default function FriendsScreen({
   }, []);
 
   // Get friends who played today
-  const friendsPlayedToday = MOCK_FRIENDS.filter(f => f.lastPlayed === 'today');
-  const friendsWaiting = MOCK_FRIENDS.filter(f => f.lastPlayed !== 'today');
+  const friendsPlayedToday = friends.filter(f => f.lastPlayed === 'today');
+  const friendsWaiting = friends.filter(f => f.lastPlayed !== 'today');
 
   // Calculate user rank (based on guesses - lower is better)
   const userRank = userPlayedToday
@@ -51,6 +75,27 @@ export default function FriendsScreen({
           f.todayResult.guesses < MOCK_USER.todayResult.guesses,
       ).length + 1
     : 0;
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          {paddingTop: insets.top, paddingBottom: insets.bottom},
+        ]}>
+        <View style={styles.header}>
+          <Pressable style={styles.backBtn} onPress={onBack}>
+            <ChevronLeft size={22} color={palette.primary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Compete</Text>
+          <View style={styles.addBtn} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={palette.primary} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View
@@ -64,14 +109,14 @@ export default function FriendsScreen({
           <ChevronLeft size={22} color={palette.primary} />
         </Pressable>
         <Text style={styles.headerTitle}>Compete</Text>
-        <Pressable style={styles.addBtn}>
+        <Pressable
+          style={styles.addBtn}
+          onPress={() => setShowAddFriends(true)}>
           <PlusIcon size={18} color={palette.textMuted} />
         </Pressable>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}>
+      <View style={styles.content}>
         {/* Today Card - Different based on play state */}
         {selectedPeriod === 'today' && userPlayedToday && (
           <TodayCard
@@ -94,14 +139,14 @@ export default function FriendsScreen({
         {selectedPeriod === 'alltime' && (
           <AllTimeCard
             userRank={3}
-            totalFriends={MOCK_FRIENDS.length}
+            totalFriends={friends.length}
             winRate={MOCK_USER.stats.winRate}
             avgGuesses={MOCK_USER.stats.avgGuesses}
           />
         )}
 
         {selectedPeriod === 'week' && (
-          <WeekCard userRank={2} totalFriends={MOCK_FRIENDS.length} />
+          <WeekCard userRank={2} totalFriends={friends.length} />
         )}
 
         {/* Segment Control */}
@@ -113,18 +158,26 @@ export default function FriendsScreen({
         {/* Leaderboard */}
         <Leaderboard
           period={selectedPeriod}
+          scope={selectedScope}
+          onScopeChange={setSelectedScope}
           userPlayedToday={userPlayedToday}
-          friends={MOCK_FRIENDS}
+          friends={friends}
           userRank={userRank}
           onFriendPress={handleFriendPress}
         />
-      </ScrollView>
+      </View>
 
       {/* H2H Modal */}
       <HeadToHeadModal
         visible={showH2H}
         friend={selectedFriend}
         onClose={handleCloseH2H}
+      />
+
+      {/* Add Friends Modal */}
+      <AddFriendsModal
+        visible={showAddFriends}
+        onClose={() => setShowAddFriends(false)}
       />
     </View>
   );
@@ -135,7 +188,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: palette.bg,
   },
-  scrollView: {
+  content: {
     flex: 1,
   },
   header: {
@@ -164,5 +217,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

@@ -30,12 +30,12 @@ import {selectDaily} from '../logic/selectDaily';
 import {getJSON, setJSON} from '../storage/mmkv';
 import {
   getProfile,
-  recordGameResult,
   getStatsForLength,
   getWinRate,
   markWordAsUsed,
   getUnusedWords,
 } from '../storage/profile';
+import {gameResultsService} from '../services/data';
 import {
   generateShareText,
   getResultEmoji,
@@ -44,6 +44,7 @@ import {
 import Header from '../components/Header';
 import {NewGameModal, GameConfig} from '../components/NewGameModal';
 import {palette} from '../theme/colors';
+import {getTileColors} from '../theme/getColors';
 import LinearGradient from 'react-native-linear-gradient';
 
 type Mode = 'daily' | 'free';
@@ -243,13 +244,14 @@ export default function GameScreen({onNavigateToStats}: Props) {
       triggerNotification('Success');
       AccessibilityInfo.announceForAccessibility?.('You win!');
 
-      // Record win stats
-      recordGameResult({
-        length,
+      // Record win stats (saves locally and syncs to cloud in prod)
+      await gameResultsService.saveGameResult({
+        wordLength: length,
         won: true,
         guesses: rows.length + 1,
         maxRows,
         date: dateISO,
+        feedback,
       });
 
       // Mark word as used after successful completion
@@ -268,13 +270,14 @@ export default function GameScreen({onNavigateToStats}: Props) {
         `You lose. The word was ${answer.toUpperCase()}`,
       );
 
-      // Record loss stats
-      recordGameResult({
-        length,
+      // Record loss stats (saves locally and syncs to cloud in prod)
+      await gameResultsService.saveGameResult({
+        wordLength: length,
         won: false,
         guesses: rows.length + 1,
         maxRows,
         date: dateISO,
+        feedback,
       });
 
       // Mark word as used even on loss (they completed the game)
@@ -459,17 +462,21 @@ export default function GameScreen({onNavigateToStats}: Props) {
               <View style={styles.guessGrid}>
                 {feedback.map((row, rIdx) => (
                   <View key={rIdx} style={styles.guessRow}>
-                    {row.map((state, cIdx) => (
-                      <View
-                        key={cIdx}
-                        style={[
-                          styles.guessTile,
-                          state === 'correct' && styles.tileCorrectSmall,
-                          state === 'present' && styles.tilePresentSmall,
-                          state === 'absent' && styles.tileAbsentSmall,
-                        ]}
-                      />
-                    ))}
+                    {row.map((state, cIdx) => {
+                      const tileColors = getTileColors();
+                      const tileColor =
+                        state === 'correct'
+                          ? tileColors.correct
+                          : state === 'present'
+                          ? tileColors.present
+                          : tileColors.absent;
+                      return (
+                        <View
+                          key={cIdx}
+                          style={[styles.guessTile, {backgroundColor: tileColor}]}
+                        />
+                      );
+                    })}
                   </View>
                 ))}
               </View>
@@ -612,6 +619,7 @@ const Tile = React.memo(
   }) => {
     const fontSize = size ? Math.floor(size.width * 0.54) : 28;
     const flipAnim = useRef(new Animated.Value(0)).current;
+    const tileColors = getTileColors();
 
     useEffect(() => {
       if (state !== 'empty') {
@@ -636,14 +644,22 @@ const Tile = React.memo(
       outputRange: ['0deg', '90deg'],
     });
 
+    // Dynamic color styles based on high contrast preference
+    const colorStyle =
+      state === 'correct'
+        ? {backgroundColor: tileColors.correct, borderColor: tileColors.correct}
+        : state === 'present'
+        ? {backgroundColor: tileColors.present, borderColor: tileColors.present}
+        : state === 'absent'
+        ? {backgroundColor: tileColors.absent, borderColor: tileColors.absent}
+        : null;
+
     return (
       <Animated.View
         style={[
           styles.tile,
           size,
-          state === 'correct' && styles.tCorrect,
-          state === 'present' && styles.tPresent,
-          state === 'absent' && styles.tAbsent,
+          colorStyle,
           isActive && styles.tileActive,
           {transform: [{rotateX}]},
         ]}>
@@ -714,33 +730,45 @@ const Key = React.memo(
     isAction?: boolean;
     accessibilityLabel?: string;
     disabled?: boolean;
-  }) => (
-    <Pressable
-      onPress={disabled ? undefined : onPress}
-      disabled={disabled}
-      style={({pressed}) => [
-        styles.key,
-        {flex: flex ?? 1},
-        state === 'correct' && styles.kCorrect,
-        state === 'present' && styles.kPresent,
-        state === 'absent' && styles.kAbsent,
-        isAction && styles.keyAction,
-        disabled && styles.keyDisabled,
-        !disabled && pressed && styles.keyPressed,
-      ]}
-      accessibilityRole="button"
-      accessibilityState={{disabled}}
-      accessibilityLabel={accessibilityLabel || label}>
-      <Text
-        style={[
-          styles.keyText,
-          isAction && styles.keyTextAction,
-          disabled && styles.keyTextDisabled,
-        ]}>
-        {label}
-      </Text>
-    </Pressable>
-  ),
+  }) => {
+    const keyColors = getTileColors();
+
+    // Dynamic color styles based on high contrast preference
+    const stateStyle =
+      state === 'correct'
+        ? {backgroundColor: keyColors.correct}
+        : state === 'present'
+        ? {backgroundColor: keyColors.present}
+        : state === 'absent'
+        ? {backgroundColor: keyColors.absent}
+        : null;
+
+    return (
+      <Pressable
+        onPress={disabled ? undefined : onPress}
+        disabled={disabled}
+        style={({pressed}) => [
+          styles.key,
+          {flex: flex ?? 1},
+          stateStyle,
+          isAction && styles.keyAction,
+          disabled && styles.keyDisabled,
+          !disabled && pressed && styles.keyPressed,
+        ]}
+        accessibilityRole="button"
+        accessibilityState={{disabled}}
+        accessibilityLabel={accessibilityLabel || label}>
+        <Text
+          style={[
+            styles.keyText,
+            isAction && styles.keyTextAction,
+            disabled && styles.keyTextDisabled,
+          ]}>
+          {label}
+        </Text>
+      </Pressable>
+    );
+  },
 );
 
 const styles = StyleSheet.create({

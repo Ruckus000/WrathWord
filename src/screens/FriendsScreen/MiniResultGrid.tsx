@@ -1,7 +1,7 @@
 import React from 'react';
 import {View, StyleSheet} from 'react-native';
 import {TileState} from '../../logic/evaluateGuess';
-import {palette} from '../../theme/colors';
+import {getTileColors} from '../../theme/getColors';
 
 type Props = {
   feedback: TileState[][];
@@ -11,22 +11,26 @@ type Props = {
 export default function MiniResultGrid({feedback, maxRows = 4}: Props) {
   const wordLength = feedback[0]?.length || 5;
   const emptyRows = Math.max(0, maxRows - feedback.length);
+  const tileColors = getTileColors();
 
   return (
     <View style={styles.container}>
       {feedback.map((row, rowIdx) => (
         <View key={rowIdx} style={styles.row}>
-          {row.map((state, colIdx) => (
-            <View
-              key={colIdx}
-              style={[
-                styles.tile,
-                state === 'correct' && styles.tileCorrect,
-                state === 'present' && styles.tilePresent,
-                state === 'absent' && styles.tileAbsent,
-              ]}
-            />
-          ))}
+          {row.map((state, colIdx) => {
+            const bgColor =
+              state === 'correct'
+                ? tileColors.correct
+                : state === 'present'
+                ? tileColors.present
+                : tileColors.absent;
+            return (
+              <View
+                key={colIdx}
+                style={[styles.tile, {backgroundColor: bgColor}]}
+              />
+            );
+          })}
         </View>
       ))}
       {Array.from({length: emptyRows}).map((_, idx) => (
@@ -52,15 +56,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 2,
-  },
-  tileCorrect: {
-    backgroundColor: palette.success,
-  },
-  tilePresent: {
-    backgroundColor: palette.warning,
-  },
-  tileAbsent: {
-    backgroundColor: '#3f3f46',
   },
   tileEmpty: {
     backgroundColor: '#27272a',

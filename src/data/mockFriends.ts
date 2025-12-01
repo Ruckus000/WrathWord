@@ -4,6 +4,7 @@ export type Friend = {
   id: string;
   name: string;
   letter: string;
+  friendCode: string;
   streak: number;
   lastPlayed: 'today' | 'yesterday' | 'inactive';
   todayResult?: {
@@ -29,6 +30,7 @@ export const MOCK_FRIENDS: Friend[] = [
     id: '1',
     name: 'Sarah',
     letter: 'S',
+    friendCode: '7KM3-XLPQ',
     streak: 14,
     lastPlayed: 'today',
     todayResult: {
@@ -55,6 +57,7 @@ export const MOCK_FRIENDS: Friend[] = [
     id: '2',
     name: 'Mike',
     letter: 'M',
+    friendCode: 'HXKP-2M4R',
     streak: 7,
     lastPlayed: 'today',
     todayResult: {
@@ -77,6 +80,7 @@ export const MOCK_FRIENDS: Friend[] = [
     id: '3',
     name: 'Jordan',
     letter: 'J',
+    friendCode: '9TYL-KQNV',
     streak: 23,
     lastPlayed: 'today',
     todayResult: {
@@ -99,6 +103,7 @@ export const MOCK_FRIENDS: Friend[] = [
     id: '4',
     name: 'Alex',
     letter: 'A',
+    friendCode: 'BNMW-4TRP',
     streak: 2,
     lastPlayed: 'today',
     todayResult: {
@@ -121,6 +126,7 @@ export const MOCK_FRIENDS: Friend[] = [
     id: '5',
     name: 'Rachel',
     letter: 'R',
+    friendCode: '2HYK-9QWL',
     streak: 0,
     lastPlayed: 'inactive',
     stats: {
@@ -141,6 +147,7 @@ export const MOCK_USER = {
   id: 'you',
   name: 'You',
   letter: 'W',
+  friendCode: 'WR4K-9NX7',
   streak: 8,
   todayResult: {
     won: true,

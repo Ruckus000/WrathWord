@@ -12,6 +12,8 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
+    "@react-native-clipboard/clipboard": "^1.16.3",
+    "@supabase/supabase-js": "^2.86.0",
     "react": "19.0.0",
     "react-native": "0.79.6",
     "react-native-linear-gradient": "^2.8.3",

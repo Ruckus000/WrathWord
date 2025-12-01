@@ -1,5 +1,6 @@
 import React, {useMemo} from 'react';
 import {View, Text, StyleSheet} from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import type {GameMode} from './types';
 
 type TileState = 'correct' | 'present' | 'absent' | 'empty';
@@ -60,8 +61,10 @@ export function BoardPreview({length, maxRows, mode}: BoardPreviewProps) {
   );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>Your Game</Text>
+    <LinearGradient
+      colors={['rgba(99, 102, 241, 0.06)', 'transparent']}
+      style={styles.container}>
+      <Text style={styles.label}>YOUR GAME</Text>
       <View style={styles.board}>
         {Array.from({length: maxRows}).map((_, rowIdx) => (
           <View key={rowIdx} style={styles.row}>
@@ -78,7 +81,7 @@ export function BoardPreview({length, maxRows, mode}: BoardPreviewProps) {
         <Text style={styles.configValue}>{length}</Text> letters ·{' '}
         <Text style={styles.configValue}>{maxRows}</Text> guesses
       </Text>
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -88,9 +91,6 @@ const styles = StyleSheet.create({
     paddingTop: 28,
     paddingBottom: 20,
     paddingHorizontal: 24,
-    backgroundColor: 'rgba(99, 102, 241, 0.04)',
-    borderBottomWidth: 1,
-    borderBottomColor: '#27272a',
   },
   label: {
     fontSize: 11,

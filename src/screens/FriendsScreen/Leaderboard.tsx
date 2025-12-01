@@ -1,12 +1,16 @@
 import React from 'react';
-import {View, Text, StyleSheet} from 'react-native';
+import {View, Text, StyleSheet, ScrollView} from 'react-native';
 import {palette} from '../../theme/colors';
 import {Friend, MOCK_USER} from '../../data/mockFriends';
+import {MOCK_GLOBAL_USERS, getUserGlobalRank} from '../../data/mockGlobalUsers';
 import {Period} from './SegmentControl';
+import ScopeToggle, {Scope} from './ScopeToggle';
 import LeaderboardRow from './LeaderboardRow';
 
 type Props = {
   period: Period;
+  scope: Scope;
+  onScopeChange: (scope: Scope) => void;
   userPlayedToday: boolean;
   friends: Friend[];
   userRank: number;
@@ -15,13 +19,19 @@ type Props = {
 
 export default function Leaderboard({
   period,
+  scope,
+  onScopeChange,
   userPlayedToday,
   friends,
   userRank,
   onFriendPress,
 }: Props) {
-  // Sort friends based on period
-  const sortedFriends = [...friends].sort((a, b) => {
+  // Determine data source and user rank based on scope
+  const users = scope === 'friends' ? friends : MOCK_GLOBAL_USERS;
+  const currentUserRank = scope === 'friends' ? userRank : getUserGlobalRank();
+
+  // Sort users based on period
+  const sortedUsers = [...users].sort((a, b) => {
     if (period === 'today') {
       const aGuesses = a.todayResult?.guesses ?? 999;
       const bGuesses = b.todayResult?.guesses ?? 999;
@@ -43,10 +53,10 @@ export default function Leaderboard({
     let userInserted = false;
     let currentRank = 1;
 
-    for (const friend of sortedFriends) {
+    for (const friend of sortedUsers) {
       // Insert user at their rank position
-      if (!userInserted && currentRank >= userRank && userPlayedToday) {
-        list.push({type: 'user', rank: userRank});
+      if (!userInserted && currentRank >= currentUserRank && userPlayedToday) {
+        list.push({type: 'user', rank: currentUserRank});
         userInserted = true;
         currentRank++;
       }
@@ -92,47 +102,64 @@ export default function Leaderboard({
       <View style={styles.header}>
         <Text style={styles.title}>
           {period === 'today' && !userPlayedToday
-            ? 'Friends Playing'
+            ? scope === 'friends'
+              ? 'Friends Playing'
+              : 'Global Players'
             : period === 'alltime'
-            ? 'All Time Rankings'
-            : 'Leaderboard'}
+            ? scope === 'friends'
+              ? 'All Time Rankings'
+              : 'Global Rankings'
+            : scope === 'friends'
+            ? 'Leaderboard'
+            : 'Global Leaderboard'}
         </Text>
-        <Text style={styles.metric}>{getMetricLabel()}</Text>
+        <ScopeToggle selected={scope} onSelect={onScopeChange} />
       </View>
 
-      <View style={styles.list}>
-        {leaderboard.map((entry, idx) => {
-          if (entry.type === 'user') {
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}>
+        <View style={styles.list}>
+          {leaderboard.map((entry, idx) => {
+            if (entry.type === 'user') {
+              return (
+                <LeaderboardRow
+                  key="you"
+                  friend={userAsFriend}
+                  rank={entry.rank}
+                  period={period}
+                  userPlayedToday={userPlayedToday}
+                  isYou
+                  isFriend={false}
+                  onPress={() => {}}
+                />
+              );
+            }
             return (
               <LeaderboardRow
-                key="you"
-                friend={userAsFriend}
+                key={entry.friend!.id}
+                friend={entry.friend!}
                 rank={entry.rank}
                 period={period}
                 userPlayedToday={userPlayedToday}
-                isYou
-                onPress={() => {}}
+                isFriend={
+                  scope === 'global' &&
+                  friends.some(f => f.id === entry.friend!.id)
+                }
+                onPress={() => onFriendPress(entry.friend!)}
               />
             );
-          }
-          return (
-            <LeaderboardRow
-              key={entry.friend!.id}
-              friend={entry.friend!}
-              rank={entry.rank}
-              period={period}
-              userPlayedToday={userPlayedToday}
-              onPress={() => onFriendPress(entry.friend!)}
-            />
-          );
-        })}
-      </View>
+          })}
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     marginHorizontal: 16,
   },
   header: {
@@ -141,6 +168,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 4,
     marginBottom: 12,
+    gap: 8,
   },
   title: {
     fontSize: 13,
@@ -148,10 +176,17 @@ const styles = StyleSheet.create({
     color: palette.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    flex: 1,
   },
   metric: {
     fontSize: 12,
     color: palette.textDim,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   list: {
     backgroundColor: palette.card,

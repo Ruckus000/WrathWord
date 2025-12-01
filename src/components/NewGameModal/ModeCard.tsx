@@ -14,13 +14,13 @@ type ModeCardProps = {
 const modeStyles = {
   daily: {
     background: 'rgba(34, 197, 94, 0.12)',
-    backgroundSelected: 'rgba(34, 197, 94, 0.18)',
+    backgroundSelected: 'rgba(34, 197, 94, 0.15)',
     borderColor: '#22c55e',
     labelColor: '#4ade80',
   },
   free: {
     background: 'rgba(99, 102, 241, 0.12)',
-    backgroundSelected: 'rgba(99, 102, 241, 0.18)',
+    backgroundSelected: 'rgba(99, 102, 241, 0.15)',
     borderColor: '#6366f1',
     labelColor: '#a5b4fc',
   },
@@ -41,26 +41,26 @@ export function ModeCard({
       onPress={onPress}
       style={[
         styles.card,
-        {
-          backgroundColor: selected ? colors.backgroundSelected : colors.background,
-          borderColor: selected ? colors.borderColor : 'transparent',
+        !selected && styles.cardInactive,
+        selected && {
+          backgroundColor: colors.backgroundSelected,
+          borderColor: colors.borderColor,
         },
       ]}
       accessibilityRole="button"
       accessibilityState={{selected}}>
       <Text style={[styles.icon, !selected && styles.iconDimmed]}>{icon}</Text>
-      <View style={styles.textContainer}>
-        <Text
-          style={[
-            styles.label,
-            selected && {color: colors.labelColor},
-          ]}>
-          {label}
-        </Text>
-        <Text style={[styles.description, selected && styles.descriptionSelected]}>
-          {description}
-        </Text>
-      </View>
+      <Text
+        style={[
+          styles.label,
+          !selected && styles.labelInactive,
+          selected && {color: colors.labelColor},
+        ]}>
+        {label}
+      </Text>
+      <Text style={[styles.description, selected && styles.descriptionSelected]}>
+        {description}
+      </Text>
     </Pressable>
   );
 }
@@ -68,35 +68,37 @@ export function ModeCard({
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
     paddingVertical: 16,
     paddingHorizontal: 12,
     borderRadius: 14,
     borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  cardInactive: {
+    backgroundColor: '#27272a',
   },
   icon: {
     fontSize: 28,
+    marginBottom: 8,
   },
   iconDimmed: {
-    opacity: 0.4,
-  },
-  textContainer: {
-    flex: 1,
+    opacity: 0.5,
   },
   label: {
-    color: '#fafafa',
     fontSize: 15,
     fontWeight: '600',
     marginBottom: 2,
   },
-  description: {
+  labelInactive: {
     color: '#71717a',
-    fontSize: 12,
-    fontWeight: '400',
+  },
+  description: {
+    color: '#52525b',
+    fontSize: 11,
+    textAlign: 'center',
   },
   descriptionSelected: {
-    color: '#a1a1aa',
+    color: '#71717a',
   },
 });
