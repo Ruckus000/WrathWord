@@ -1,8 +1,8 @@
-import React from 'react';
-import {View, Text, StyleSheet, ScrollView} from 'react-native';
+import React, {useEffect, useState} from 'react';
+import {View, Text, StyleSheet, ScrollView, ActivityIndicator} from 'react-native';
 import {palette} from '../../theme/colors';
 import {Friend, MOCK_USER} from '../../data/mockFriends';
-import {MOCK_GLOBAL_USERS, getUserGlobalRank} from '../../data/mockGlobalUsers';
+import {friendsService} from '../../services/data';
 import {Period} from './SegmentControl';
 import ScopeToggle, {Scope} from './ScopeToggle';
 import LeaderboardRow from './LeaderboardRow';
@@ -26,9 +26,33 @@ export default function Leaderboard({
   userRank,
   onFriendPress,
 }: Props) {
+  const [globalUsers, setGlobalUsers] = useState<Friend[]>([]);
+  const [loadingGlobal, setLoadingGlobal] = useState(false);
+
+  // Load global leaderboard when scope changes to global
+  useEffect(() => {
+    if (scope === 'global' && globalUsers.length === 0) {
+      loadGlobalLeaderboard();
+    }
+  }, [scope]);
+
+  const loadGlobalLeaderboard = async () => {
+    setLoadingGlobal(true);
+    try {
+      const data = await friendsService.getGlobalLeaderboard(50);
+      setGlobalUsers(data);
+    } catch (err) {
+      console.error('Failed to load global leaderboard:', err);
+    } finally {
+      setLoadingGlobal(false);
+    }
+  };
+
   // Determine data source and user rank based on scope
-  const users = scope === 'friends' ? friends : MOCK_GLOBAL_USERS;
-  const currentUserRank = scope === 'friends' ? userRank : getUserGlobalRank();
+  const users = scope === 'friends' ? friends : globalUsers;
+  // Calculate global rank based on position in leaderboard
+  const globalRankIndex = globalUsers.findIndex(u => u.id === MOCK_USER.id);
+  const currentUserRank = scope === 'friends' ? userRank : (globalRankIndex >= 0 ? globalRankIndex + 1 : globalUsers.length + 1);
 
   // Sort users based on period
   const sortedUsers = [...users].sort((a, b) => {
@@ -90,6 +114,7 @@ export default function Leaderboard({
     id: MOCK_USER.id,
     name: MOCK_USER.name,
     letter: MOCK_USER.letter,
+    friendCode: MOCK_USER.friendCode,
     streak: MOCK_USER.streak,
     lastPlayed: 'today',
     todayResult: MOCK_USER.todayResult,
@@ -120,6 +145,11 @@ export default function Leaderboard({
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}>
+        {loadingGlobal && scope === 'global' ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color={palette.primary} />
+          </View>
+        ) : (
         <View style={styles.list}>
           {leaderboard.map((entry, idx) => {
             if (entry.type === 'user') {
@@ -152,6 +182,7 @@ export default function Leaderboard({
             );
           })}
         </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -192,5 +223,12 @@ const styles = StyleSheet.create({
     backgroundColor: palette.card,
     borderRadius: 16,
     overflow: 'hidden',
+  },
+  loadingContainer: {
+    backgroundColor: palette.card,
+    borderRadius: 16,
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

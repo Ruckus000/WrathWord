@@ -20,10 +20,14 @@ const MOCK_SESSION_KEY = 'mock.auth.session';
 // Mock dev user
 const createMockUser = (username?: string): AuthUser => {
   const profile = getProfile();
+  const displayName = getDisplayName();
+  const friendCode = getFriendCode();
   return {
     id: profile.id,
     email: 'dev@wrathword.local',
     username: username || 'DevUser',
+    displayName: displayName !== 'Player' ? displayName : username || 'DevUser',
+    friendCode,
     createdAt: new Date(profile.createdAt).toISOString(),
   };
 };
@@ -135,6 +139,10 @@ class MockAuthService implements IAuthService {
 }
 
 export const mockAuthService = new MockAuthService();
+
+
+
+
 
 
 

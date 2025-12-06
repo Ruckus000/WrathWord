@@ -1,41 +1,50 @@
 /**
  * Environment configuration for WrathWord
- * 
+ *
  * Controls whether the app runs in development mode (using mocked data)
  * or production mode (using Supabase backend).
  */
 
-// Check if running in React Native development mode
-const isReactNativeDev = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
+import {SUPABASE_URL, SUPABASE_ANON_KEY} from '@env';
 
-// Allow manual override via environment variable
-// In production builds, you can set this to 'production' to force prod mode
-const ENV_MODE = process.env.NODE_ENV || 'development';
+/**
+ * ========================================
+ * MANUAL MODE TOGGLE
+ * ========================================
+ *
+ * Set this to control which mode the app runs in:
+ *
+ *   true  = DEV MODE (mock data, no auth required)
+ *   false = PROD MODE (Supabase backend, real auth)
+ *
+ * Change this value and restart Metro to switch modes.
+ */
+const FORCE_DEV_MODE = false;
 
 /**
  * Main flag that determines if app is in development mode.
- * 
- * When true:
- * - Authentication is bypassed
- * - All data comes from local mocks
+ *
+ * When true (DEV MODE):
+ * - Authentication is bypassed (auto-logged in)
+ * - Friends data comes from mockFriends.ts
+ * - Leaderboards show mock data
  * - No network calls to Supabase
- * 
- * When false:
- * - Real authentication required
- * - Data synced with Supabase backend
- * - Network calls enabled
- * 
- * DEFAULT: true (safe for development)
+ *
+ * When false (PROD MODE):
+ * - Real Supabase authentication required
+ * - Friends/leaderboards from database
+ * - Game results sync to cloud
+ * - Requires .env with Supabase credentials
  */
-export const isDevelopment = isReactNativeDev || ENV_MODE === 'development';
+export const isDevelopment = FORCE_DEV_MODE;
 
 /**
  * Supabase configuration
  * These should be set via environment variables in production builds
  */
 export const supabaseConfig = {
-    url: process.env.SUPABASE_URL || '',
-    anonKey: process.env.SUPABASE_ANON_KEY || '',
+    url: SUPABASE_URL || '',
+    anonKey: SUPABASE_ANON_KEY || '',
 };
 
 /**

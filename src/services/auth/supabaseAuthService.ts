@@ -29,9 +29,15 @@ class SupabaseAuthService implements IAuthService {
 
     try {
       // Sign up with Supabase Auth
+      // Pass username in metadata - database trigger will use it to create profile
       const {data: authData, error: authError} = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            username: username,
+          },
+        },
       });
 
       if (authError) {
@@ -45,24 +51,19 @@ class SupabaseAuthService implements IAuthService {
         };
       }
 
-      // Generate friend code for this user
-      const friendCode = getFriendCode();
-
-      // Create profile in database
-      const {error: profileError} = await supabase.from('profiles').insert({
-        user_id: authData.user.id,
-        username,
-        display_name: username,
-        friend_code: friendCode,
-      });
-
-      if (profileError) {
+      // Profile is created automatically by database trigger (handle_new_user)
+      // Check if email confirmation is required (no session means confirmation needed)
+      if (!authData.session) {
         return {
           data: null,
-          error: {message: `Failed to create profile: ${profileError.message}`},
+          error: {
+            message: 'Please check your email to confirm your account',
+            code: 'EMAIL_CONFIRMATION_REQUIRED',
+          },
         };
       }
 
+      // Session exists - user can proceed immediately
       const session: AuthSession = {
         user: {
           id: authData.user.id,
@@ -70,8 +71,8 @@ class SupabaseAuthService implements IAuthService {
           username,
           createdAt: authData.user.created_at,
         },
-        accessToken: authData.session?.access_token,
-        refreshToken: authData.session?.refresh_token,
+        accessToken: authData.session.access_token,
+        refreshToken: authData.session.refresh_token,
       };
 
       return {data: session, error: null};
@@ -115,7 +116,7 @@ class SupabaseAuthService implements IAuthService {
       // Get user profile
       const {data: profile} = await supabase
         .from('profiles')
-        .select('username')
+        .select('username, display_name, friend_code')
         .eq('user_id', authData.user.id)
         .single();
 
@@ -124,6 +125,8 @@ class SupabaseAuthService implements IAuthService {
           id: authData.user.id,
           email: authData.user.email,
           username: profile?.username,
+          displayName: profile?.display_name,
+          friendCode: profile?.friend_code,
           createdAt: authData.user.created_at,
         },
         accessToken: authData.session?.access_token,
@@ -175,10 +178,10 @@ class SupabaseAuthService implements IAuthService {
         return null;
       }
 
-      // Get user profile for username
+      // Get user profile
       const {data: profile} = await supabase
         .from('profiles')
-        .select('username')
+        .select('username, display_name, friend_code')
         .eq('user_id', user.id)
         .single();
 
@@ -186,6 +189,8 @@ class SupabaseAuthService implements IAuthService {
         id: user.id,
         email: user.email,
         username: profile?.username,
+        displayName: profile?.display_name,
+        friendCode: profile?.friend_code,
         createdAt: user.created_at,
       };
     } catch {
@@ -195,30 +200,37 @@ class SupabaseAuthService implements IAuthService {
 
   async getSession(): Promise<AuthSession | null> {
     if (!supabase) {
+      console.log('[Auth] Supabase not configured');
       return null;
     }
 
     try {
+      console.log('[Auth] Getting session...');
       const {
         data: {session},
       } = await supabase.auth.getSession();
 
       if (!session) {
+        console.log('[Auth] No session found');
         return null;
       }
 
+      console.log('[Auth] Session found, fetching profile...');
       // Get user profile
       const {data: profile} = await supabase
         .from('profiles')
-        .select('username')
+        .select('username, display_name, friend_code')
         .eq('user_id', session.user.id)
         .single();
+      console.log('[Auth] Profile fetched:', profile?.username);
 
       return {
         user: {
           id: session.user.id,
           email: session.user.email,
           username: profile?.username,
+          displayName: profile?.display_name,
+          friendCode: profile?.friend_code,
           createdAt: session.user.created_at,
         },
         accessToken: session.access_token,
@@ -244,10 +256,10 @@ class SupabaseAuthService implements IAuthService {
         return;
       }
 
-      // Get user profile
-      const {data: profile} = await supabase
+      // Get user profile (supabase is guaranteed non-null here since we checked above)
+      const {data: profile} = await supabase!
         .from('profiles')
-        .select('username')
+        .select('username, display_name, friend_code')
         .eq('user_id', session.user.id)
         .single();
 
@@ -256,6 +268,8 @@ class SupabaseAuthService implements IAuthService {
           id: session.user.id,
           email: session.user.email,
           username: profile?.username,
+          displayName: profile?.display_name,
+          friendCode: profile?.friend_code,
           createdAt: session.user.created_at,
         },
         accessToken: session.access_token,
@@ -270,6 +284,10 @@ class SupabaseAuthService implements IAuthService {
 }
 
 export const supabaseAuthService = new SupabaseAuthService();
+
+
+
+
 
 
 

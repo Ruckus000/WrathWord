@@ -111,6 +111,81 @@ class MockFriendsService implements IFriendsService {
  * Fetches from Supabase backend
  */
 class SupabaseFriendsService implements IFriendsService {
+  /**
+   * Fetch today's game results for a list of users
+   */
+  private async getTodayResults(
+    userIds: string[],
+  ): Promise<Map<string, {won: boolean; guesses: number; feedback?: any}>> {
+    if (!supabase || userIds.length === 0) {
+      return new Map();
+    }
+
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const {data, error} = await supabase
+        .from('game_results')
+        .select('user_id, won, guesses, feedback')
+        .eq('date', today)
+        .in('user_id', userIds);
+
+      if (error || !data) {
+        return new Map();
+      }
+
+      const resultsMap = new Map();
+      data.forEach(result => {
+        resultsMap.set(result.user_id, {
+          won: result.won,
+          guesses: result.guesses,
+          feedback: result.feedback,
+        });
+      });
+
+      return resultsMap;
+    } catch {
+      return new Map();
+    }
+  }
+
+  /**
+   * Calculate last played status based on game results
+   */
+  private async getLastPlayedStatus(
+    userId: string,
+  ): Promise<'today' | 'yesterday' | 'inactive'> {
+    if (!supabase) {
+      return 'inactive';
+    }
+
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const yesterday = new Date(Date.now() - 86400000)
+        .toISOString()
+        .split('T')[0];
+
+      const {data, error} = await supabase
+        .from('game_results')
+        .select('date')
+        .eq('user_id', userId)
+        .order('date', {ascending: false})
+        .limit(1)
+        .single();
+
+      if (error || !data) {
+        return 'inactive';
+      }
+
+      if (data.date === today) {
+        return 'today';
+      } else if (data.date === yesterday) {
+        return 'yesterday';
+      }
+      return 'inactive';
+    } catch {
+      return 'inactive';
+    }
+  }
   async getFriends(): Promise<Friend[]> {
     if (!supabase) {
       return [];
@@ -122,21 +197,52 @@ class SupabaseFriendsService implements IFriendsService {
         return [];
       }
 
-      // Get friendships
-      const {data: friendships, error} = await supabase
-        .from('friendships')
-        .select('*, profiles!inner(*)')
-        .or(`user_id_1.eq.${user.id},user_id_2.eq.${user.id}`)
-        .eq('status', 'accepted');
+      // Use the leaderboard function with friends_only to get all friend data
+      // This gives us both the friend list and their stats in one query
+      const {data, error} = await supabase.rpc('get_leaderboard', {
+        p_user_id: user.id,
+        p_friends_only: true,
+        p_period: 'alltime',
+        p_limit: 100, // Get all friends
+      });
 
-      if (error || !friendships) {
+      if (error || !data) {
         return [];
       }
 
+      // Fetch today's results for these friends
+      const userIds = data.map((row: any) => row.user_id);
+      const todayResults = await this.getTodayResults(userIds);
+
       // Transform to Friend type
-      // This is simplified - in real implementation you'd fetch stats too
-      return [];
-    } catch {
+      return data.map((row: any) => {
+        const todayResult = todayResults.get(row.user_id);
+        return {
+          id: row.user_id,
+          name: row.display_name || row.username,
+          letter: (row.display_name || row.username).charAt(0).toUpperCase(),
+          friendCode: row.friend_code,
+          streak: row.current_streak || 0,
+          lastPlayed: todayResult ? 'today' : 'inactive',
+          todayResult: todayResult
+            ? {
+                won: todayResult.won,
+                guesses: todayResult.guesses,
+                feedback: todayResult.feedback,
+              }
+            : undefined,
+          stats: {
+            played: row.games_played || 0,
+            won: row.games_won || 0,
+            winRate: parseFloat(row.win_rate) || 0,
+            avgGuesses: parseFloat(row.avg_guesses) || 0,
+            maxStreak: row.max_streak || 0,
+          },
+          h2h: {yourWins: 0, theirWins: 0}, // Will be populated separately if needed
+        };
+      });
+    } catch (err) {
+      console.error('Failed to fetch friends:', err);
       return [];
     }
   }
@@ -307,9 +413,39 @@ class SupabaseFriendsService implements IFriendsService {
         return [];
       }
 
-      // Transform to Friend type (simplified)
-      return [];
-    } catch {
+      // Fetch today's results for these users
+      const userIds = data.map((row: any) => row.user_id);
+      const todayResults = await this.getTodayResults(userIds);
+
+      // Transform to Friend type
+      return data.map((row: any) => {
+        const todayResult = todayResults.get(row.user_id);
+        return {
+          id: row.user_id,
+          name: row.display_name || row.username,
+          letter: (row.display_name || row.username).charAt(0).toUpperCase(),
+          friendCode: row.friend_code,
+          streak: row.current_streak || 0,
+          lastPlayed: todayResult ? 'today' : 'inactive',
+          todayResult: todayResult
+            ? {
+                won: todayResult.won,
+                guesses: todayResult.guesses,
+                feedback: todayResult.feedback,
+              }
+            : undefined,
+          stats: {
+            played: row.games_played || 0,
+            won: row.games_won || 0,
+            winRate: parseFloat(row.win_rate) || 0,
+            avgGuesses: parseFloat(row.avg_guesses) || 0,
+            maxStreak: row.max_streak || 0,
+          },
+          h2h: {yourWins: 0, theirWins: 0}, // Will be populated separately
+        };
+      });
+    } catch (err) {
+      console.error('Failed to fetch global leaderboard:', err);
       return [];
     }
   }
@@ -336,9 +472,39 @@ class SupabaseFriendsService implements IFriendsService {
         return [];
       }
 
-      // Transform to Friend type (simplified)
-      return [];
-    } catch {
+      // Fetch today's results for these users
+      const userIds = data.map((row: any) => row.user_id);
+      const todayResults = await this.getTodayResults(userIds);
+
+      // Transform to Friend type
+      return data.map((row: any) => {
+        const todayResult = todayResults.get(row.user_id);
+        return {
+          id: row.user_id,
+          name: row.display_name || row.username,
+          letter: (row.display_name || row.username).charAt(0).toUpperCase(),
+          friendCode: row.friend_code,
+          streak: row.current_streak || 0,
+          lastPlayed: todayResult ? 'today' : 'inactive',
+          todayResult: todayResult
+            ? {
+                won: todayResult.won,
+                guesses: todayResult.guesses,
+                feedback: todayResult.feedback,
+              }
+            : undefined,
+          stats: {
+            played: row.games_played || 0,
+            won: row.games_won || 0,
+            winRate: parseFloat(row.win_rate) || 0,
+            avgGuesses: parseFloat(row.avg_guesses) || 0,
+            maxStreak: row.max_streak || 0,
+          },
+          h2h: {yourWins: 0, theirWins: 0}, // Will be populated separately
+        };
+      });
+    } catch (err) {
+      console.error('Failed to fetch friends leaderboard:', err);
       return [];
     }
   }

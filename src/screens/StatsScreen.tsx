@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
   Alert,
+  Modal,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {
@@ -32,6 +33,7 @@ import {
   TrashIcon,
 } from '../components/icons/SettingsIcons';
 import CompeteCard from '../components/CompeteCard';
+import ProfileScreen from './ProfileScreen';
 
 type Props = {
   onBack: () => void;
@@ -52,6 +54,7 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
   const [highContrast, setHighContrast] = useState(
     profile.preferences.highContrastEnabled ?? false,
   );
+  const [showProfile, setShowProfile] = useState(false);
 
   const totalStats = getTotalStats();
   const lengthStats = getStatsForLength(selectedLength);
@@ -254,9 +257,9 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
                 <SettingsRow
                   icon={<UserIcon size={18} />}
                   iconBg={palette.primary}
-                  label={user?.username || user?.email || 'Account'}
-                  subtitle="Signed in"
-                  onPress={handleSignOut}
+                  label={user?.displayName || user?.username || user?.email || 'Account'}
+                  subtitle={user?.friendCode || 'Tap to view profile'}
+                  onPress={() => setShowProfile(true)}
                 />
               )}
               {isDevelopmentMode && (
@@ -318,8 +321,19 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
           />
         </View>
 
-        <Text style={styles.versionFooter}>WrathWord v1.0.0</Text>
+        <Text style={styles.versionFooter}>
+          WrathWord v1.0.0 {isDevelopmentMode ? '• DEV MODE' : ''}
+        </Text>
       </ScrollView>
+
+      {/* Profile Screen Modal */}
+      <Modal
+        visible={showProfile}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowProfile(false)}>
+        <ProfileScreen onClose={() => setShowProfile(false)} />
+      </Modal>
     </View>
   );
 }

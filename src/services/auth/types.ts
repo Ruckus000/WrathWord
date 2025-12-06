@@ -9,6 +9,8 @@ export interface AuthUser {
   id: string;
   email?: string;
   username?: string;
+  displayName?: string;
+  friendCode?: string;
   createdAt?: string;
 }
 
@@ -65,6 +67,10 @@ export interface IAuthService {
     callback: (session: AuthSession | null) => void,
   ): () => void;
 }
+
+
+
+
 
 
 

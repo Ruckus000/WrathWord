@@ -402,6 +402,48 @@ import {KeyboardAwareScrollView} from 'react-native-keyboard-controller';
 
 The game uses a **custom keyboard UI** (Pressable buttons in `GameScreen.tsx`), not native `TextInput`. No keyboard handling needed there.
 
+## React Native Architecture
+
+This project uses the **Legacy Architecture** (Bridge-based), not the New Architecture (Fabric/TurboModules).
+
+### Why Legacy Architecture?
+
+1. **Stability**: Legacy is battle-tested and well-documented
+2. **Dependency Compatibility**: All current dependencies work on Legacy
+3. **App Complexity**: This app doesn't need JSI performance benefits
+4. **Debugging**: More community resources for Legacy issues
+
+### Configuration
+
+- **iOS**: `new_arch_enabled => false` in `ios/Podfile`
+- **Android**: `newArchEnabled=false` in `android/gradle.properties`
+
+### Key Dependencies
+
+| Package | Version | Notes |
+|---------|---------|-------|
+| react-native-mmkv | 4.x | Uses Nitro framework; works on both architectures |
+| react-native-nitro-modules | 0.x | Required by MMKV v4 |
+| react-native-reanimated | 3.x | Works on both; v4 requires New Arch |
+| react-native-keyboard-controller | 1.x | Works on both architectures |
+
+### MMKV v4 Migration Notes
+
+MMKV v4 has these API differences from v2:
+- Constructor: `createMMKV()` instead of `new MMKV()`
+- Delete method: `kv.remove(key)` instead of `kv.delete(key)`
+- Import: `import {createMMKV} from 'react-native-mmkv'`
+
+Data is fully compatible - existing v2 data is readable by v4.
+
+### When to Revisit
+
+Consider New Architecture when:
+- Upgrading to React Native 0.80+
+- Adding features requiring synchronous native calls
+- Complex real-time animations
+- Bundle size/performance becomes critical
+
 ## Documentation
 
 - `docs/database-schema.md` - Supabase schema reference

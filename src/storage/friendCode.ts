@@ -1,7 +1,7 @@
 import {kv} from './mmkv';
-import {getProfile} from './profile';
 
 const FRIEND_CODE_KEY = 'user.friendCode';
+const DISPLAY_NAME_KEY = 'user.displayName';
 
 /**
  * Generates a unique 8-character friend code in format XXXX-XXXX.
@@ -33,14 +33,19 @@ export function getFriendCode(): string {
 }
 
 /**
- * Gets the user's display name from profile storage.
+ * Gets the user's display name from local storage.
  * Defaults to 'Player' if not set.
  */
 export function getDisplayName(): string {
-  const profile = getProfile();
-  // Profile doesn't have a name field yet, so default to 'Player'
-  // In the future, this could be added to UserProfile type
-  return 'Player';
+  const displayName = kv.getString(DISPLAY_NAME_KEY);
+  return displayName || 'Player';
+}
+
+/**
+ * Sets the user's display name in local storage.
+ */
+export function setDisplayName(name: string): void {
+  kv.set(DISPLAY_NAME_KEY, name);
 }
 
 /**

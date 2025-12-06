@@ -18,11 +18,13 @@ import {
   getTotalStats as getLocalTotalStats,
   UserPreferences,
 } from '../../storage/profile';
+import {setDisplayName as setLocalDisplayName} from '../../storage/friendCode';
 
 export interface IProfileService {
   getProfile(): Promise<UserProfile>;
   updateProfile(updates: Partial<UserProfile>): Promise<void>;
   updatePreferences(prefs: Partial<UserPreferences>): Promise<void>;
+  updateDisplayName(displayName: string): Promise<void>;
   syncStats(): Promise<void>;
   getStatsForLength(length: number): Promise<LengthStats>;
   getTotalStats(): Promise<{
@@ -50,6 +52,11 @@ class MockProfileService implements IProfileService {
 
   async updatePreferences(prefs: Partial<UserPreferences>): Promise<void> {
     updateLocalPreferences(prefs);
+  }
+
+  async updateDisplayName(displayName: string): Promise<void> {
+    // Store locally for dev mode
+    setLocalDisplayName(displayName);
   }
 
   async syncStats(): Promise<void> {
@@ -133,6 +140,40 @@ class SupabaseProfileService implements IProfileService {
     updateLocalPreferences(prefs);
   }
 
+  async updateDisplayName(displayName: string): Promise<void> {
+    // Store locally
+    setLocalDisplayName(displayName);
+
+    if (!supabase) {
+      return;
+    }
+
+    try {
+      const {
+        data: {user},
+      } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Not authenticated');
+      }
+
+      // Update in Supabase
+      const {error} = await supabase
+        .from('profiles')
+        .update({
+          display_name: displayName,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+    } catch (err) {
+      // Re-throw so UI can handle it
+      throw err;
+    }
+  }
+
   async syncStats(): Promise<void> {
     if (!supabase) {
       return;
@@ -192,6 +233,10 @@ export function getProfileService(): IProfileService {
 }
 
 export const profileService = getProfileService();
+
+
+
+
 
 
 

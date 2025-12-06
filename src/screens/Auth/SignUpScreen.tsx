@@ -37,6 +37,7 @@ export default function SignUpScreen({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   const validateForm = (): boolean => {
     if (!email || !username || !password || !confirmPassword) {
@@ -80,18 +81,55 @@ export default function SignUpScreen({
       const result = await authService.signUp(email, password, username);
 
       if (result.error) {
+        // Check if this is email confirmation required (not an error, it's success!)
+        if (result.error.code === 'EMAIL_CONFIRMATION_REQUIRED') {
+          setShowConfirmation(true);
+          setLoading(false);
+          return;
+        }
         setError(result.error.message);
         setLoading(false);
         return;
       }
 
-      // Success
+      // Immediate success (no email confirmation required)
       onSignUpSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create account');
       setLoading(false);
     }
   };
+
+  // Show email confirmation success screen
+  if (showConfirmation) {
+    return (
+      <View style={[styles.container, {paddingTop: insets.top}]}>
+        <View style={styles.confirmationContainer}>
+          <Text style={styles.confirmationEmoji}>📧</Text>
+          <Text style={styles.confirmationTitle}>Check Your Email</Text>
+          <Text style={styles.confirmationText}>
+            We sent a confirmation link to{'\n'}
+            <Text style={styles.confirmationEmail}>{email}</Text>
+          </Text>
+          <Text style={styles.confirmationSubtext}>
+            Click the link in the email to activate your account, then come back
+            and sign in.
+          </Text>
+          <Pressable
+            onPress={onNavigateToSignIn}
+            style={styles.confirmationButton}>
+            <LinearGradient
+              colors={[palette.gradientStart, palette.gradientEnd]}
+              start={{x: 0, y: 0}}
+              end={{x: 1, y: 1}}
+              style={styles.signUpButtonGradient}>
+              <Text style={styles.signUpButtonText}>Go to Sign In</Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAwareScrollView
@@ -327,6 +365,46 @@ const styles = StyleSheet.create({
     color: palette.textDim,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  confirmationContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  confirmationEmoji: {
+    fontSize: 72,
+    marginBottom: 24,
+  },
+  confirmationTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: palette.textPrimary,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  confirmationText: {
+    fontSize: 16,
+    color: palette.textMuted,
+    textAlign: 'center',
+    marginBottom: 8,
+    lineHeight: 24,
+  },
+  confirmationEmail: {
+    fontWeight: '600',
+    color: palette.textPrimary,
+  },
+  confirmationSubtext: {
+    fontSize: 14,
+    color: palette.textDim,
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 20,
+  },
+  confirmationButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    width: '100%',
   },
 });
 

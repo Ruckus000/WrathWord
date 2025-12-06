@@ -1,7 +1,7 @@
 // src/storage/mmkv.ts
-import {MMKV} from 'react-native-mmkv';
+import {createMMKV} from 'react-native-mmkv';
 
-export const kv = new MMKV();
+export const kv = createMMKV();
 
 export type Stats = {
   played: number;

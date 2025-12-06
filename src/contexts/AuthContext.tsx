@@ -43,18 +43,46 @@ export function AuthProvider({children}: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    authService.getSession().then(initialSession => {
-      setSession(initialSession);
-      setLoading(false);
-    });
+    let isMounted = true;
+
+    // Get initial session with timeout to prevent infinite loading
+    const initAuth = async () => {
+      try {
+        // Add a 10 second timeout
+        const timeoutPromise = new Promise<null>(resolve =>
+          setTimeout(() => resolve(null), 10000),
+        );
+        const sessionPromise = authService.getSession();
+
+        const initialSession = await Promise.race([
+          sessionPromise,
+          timeoutPromise,
+        ]);
+
+        if (isMounted) {
+          setSession(initialSession);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Auth initialization failed:', error);
+        if (isMounted) {
+          setSession(null);
+          setLoading(false);
+        }
+      }
+    };
+
+    initAuth();
 
     // Subscribe to auth state changes
     const unsubscribe = authService.onAuthStateChange(newSession => {
-      setSession(newSession);
+      if (isMounted) {
+        setSession(newSession);
+      }
     });
 
     return () => {
+      isMounted = false;
       unsubscribe();
     };
   }, []);
@@ -75,6 +103,10 @@ export function AuthProvider({children}: AuthProviderProps) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
+
+
+
+
 
 
 

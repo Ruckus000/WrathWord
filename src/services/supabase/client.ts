@@ -1,9 +1,12 @@
 /**
  * Supabase client configuration
- * 
+ *
  * This module initializes and exports the Supabase client for use throughout the app.
  * Uses MMKV for session persistence to maintain auth state across app restarts.
  */
+
+// URL polyfill required for Supabase in React Native
+import 'react-native-url-polyfill/auto';
 
 import {createClient, SupabaseClient} from '@supabase/supabase-js';
 import {supabaseConfig, shouldUseSupabase} from '../../config/environment';
@@ -18,7 +21,7 @@ const mmkvStorage = {
     kv.set(key, value);
   },
   removeItem: (key: string) => {
-    kv.delete(key);
+    kv.remove(key);
   },
 };
 
@@ -27,22 +30,31 @@ const mmkvStorage = {
  * Only creates a real client if Supabase is configured
  */
 function initializeSupabase(): SupabaseClient | null {
+  console.log('[Supabase] Initializing, shouldUseSupabase:', shouldUseSupabase());
+
   if (!shouldUseSupabase()) {
     // Return null in dev mode or if not configured
     // Services will check for this and use mock implementations
+    console.log('[Supabase] Skipping - dev mode or not configured');
     return null;
   }
 
-  const client = createClient(supabaseConfig.url, supabaseConfig.anonKey, {
-    auth: {
-      storage: mmkvStorage,
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: false,
-    },
-  });
-
-  return client;
+  try {
+    console.log('[Supabase] Creating client...');
+    const client = createClient(supabaseConfig.url, supabaseConfig.anonKey, {
+      auth: {
+        storage: mmkvStorage,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
+    });
+    console.log('[Supabase] Client created successfully');
+    return client;
+  } catch (error) {
+    console.error('[Supabase] Failed to create client:', error);
+    return null;
+  }
 }
 
 /**
@@ -204,6 +216,10 @@ export type Database = {
     };
   };
 };
+
+
+
+
 
 
 
