@@ -1,6 +1,7 @@
 // app/App.tsx
 import React, {useState} from 'react';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
+import {KeyboardProvider} from 'react-native-keyboard-controller';
 import {View, ActivityIndicator, StyleSheet} from 'react-native';
 import GameScreen from '../src/screens/GameScreen';
 import StatsScreen from '../src/screens/StatsScreen';
@@ -68,11 +69,13 @@ function AppContent() {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </SafeAreaProvider>
+    <KeyboardProvider>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </SafeAreaProvider>
+    </KeyboardProvider>
   );
 }
 

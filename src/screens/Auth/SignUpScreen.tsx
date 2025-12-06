@@ -13,11 +13,9 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {KeyboardAwareScrollView} from 'react-native-keyboard-controller';
 import {palette} from '../../theme/colors';
 import {authService} from '../../services/auth';
 import {ChevronLeft} from '../../components/icons/SettingsIcons';
@@ -96,127 +94,125 @@ export default function SignUpScreen({
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, {paddingTop: insets.top, paddingBottom: insets.bottom}]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled">
-        {/* Back Button */}
-        <Pressable style={styles.backButton} onPress={onNavigateToSignIn}>
-          <ChevronLeft size={24} color={palette.textPrimary} />
+    <KeyboardAwareScrollView
+      style={[styles.container, {paddingTop: insets.top}]}
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+      bottomOffset={insets.bottom}>
+      {/* Back Button */}
+      <Pressable style={styles.backButton} onPress={onNavigateToSignIn}>
+        <ChevronLeft size={24} color={palette.textPrimary} />
+      </Pressable>
+
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.logoEmoji}>🎯</Text>
+        <Text style={styles.title}>Create Account</Text>
+        <Text style={styles.subtitle}>Join WrathWord and compete with friends</Text>
+      </View>
+
+      {/* Form */}
+      <View style={styles.form}>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Username</Text>
+          <TextInput
+            style={styles.input}
+            value={username}
+            onChangeText={setUsername}
+            placeholder="wordmaster"
+            placeholderTextColor={palette.textDim}
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!loading}
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            placeholderTextColor={palette.textDim}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!loading}
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Password</Text>
+          <TextInput
+            style={styles.input}
+            value={password}
+            onChangeText={setPassword}
+            placeholder="At least 6 characters"
+            placeholderTextColor={palette.textDim}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!loading}
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Confirm Password</Text>
+          <TextInput
+            style={styles.input}
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            placeholder="Re-enter password"
+            placeholderTextColor={palette.textDim}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!loading}
+          />
+        </View>
+
+        {error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
+        <Pressable
+          onPress={handleSignUp}
+          disabled={loading}
+          style={({pressed}) => [
+            styles.signUpButton,
+            pressed && !loading && styles.signUpButtonPressed,
+          ]}>
+          <LinearGradient
+            colors={[palette.gradientStart, palette.gradientEnd]}
+            start={{x: 0, y: 0}}
+            end={{x: 1, y: 1}}
+            style={styles.signUpButtonGradient}>
+            {loading ? (
+              <ActivityIndicator color={palette.textPrimary} />
+            ) : (
+              <Text style={styles.signUpButtonText}>Create Account</Text>
+            )}
+          </LinearGradient>
         </Pressable>
+      </View>
 
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.logoEmoji}>🎯</Text>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join WrathWord and compete with friends</Text>
-        </View>
+      {/* Sign In Link */}
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>Already have an account? </Text>
+        <Pressable onPress={onNavigateToSignIn} disabled={loading}>
+          <Text style={styles.footerLink}>Sign In</Text>
+        </Pressable>
+      </View>
 
-        {/* Form */}
-        <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Username</Text>
-            <TextInput
-              style={styles.input}
-              value={username}
-              onChangeText={setUsername}
-              placeholder="wordmaster"
-              placeholderTextColor={palette.textDim}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor={palette.textDim}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="At least 6 characters"
-              placeholderTextColor={palette.textDim}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Confirm Password</Text>
-            <TextInput
-              style={styles.input}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Re-enter password"
-              placeholderTextColor={palette.textDim}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
-          </View>
-
-          {error ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          <Pressable
-            onPress={handleSignUp}
-            disabled={loading}
-            style={({pressed}) => [
-              styles.signUpButton,
-              pressed && !loading && styles.signUpButtonPressed,
-            ]}>
-            <LinearGradient
-              colors={[palette.gradientStart, palette.gradientEnd]}
-              start={{x: 0, y: 0}}
-              end={{x: 1, y: 1}}
-              style={styles.signUpButtonGradient}>
-              {loading ? (
-                <ActivityIndicator color={palette.textPrimary} />
-              ) : (
-                <Text style={styles.signUpButtonText}>Create Account</Text>
-              )}
-            </LinearGradient>
-          </Pressable>
-        </View>
-
-        {/* Sign In Link */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account? </Text>
-          <Pressable onPress={onNavigateToSignIn} disabled={loading}>
-            <Text style={styles.footerLink}>Sign In</Text>
-          </Pressable>
-        </View>
-
-        {/* Terms */}
-        <Text style={styles.termsText}>
-          By creating an account, you agree to our{'\n'}
-          Terms of Service and Privacy Policy
-        </Text>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      {/* Terms */}
+      <Text style={styles.termsText}>
+        By creating an account, you agree to our{'\n'}
+        Terms of Service and Privacy Policy
+      </Text>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -333,6 +329,10 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
+
+
+
+
 
 
 

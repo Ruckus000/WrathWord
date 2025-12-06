@@ -13,11 +13,9 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {KeyboardAwareScrollView} from 'react-native-keyboard-controller';
 import {palette} from '../../theme/colors';
 import {authService} from '../../services/auth';
 import LinearGradient from 'react-native-linear-gradient';
@@ -65,87 +63,85 @@ export default function SignInScreen({
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, {paddingTop: insets.top, paddingBottom: insets.bottom}]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled">
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.logoEmoji}>🎯</Text>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to sync your progress</Text>
+    <KeyboardAwareScrollView
+      style={[styles.container, {paddingTop: insets.top}]}
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+      bottomOffset={insets.bottom}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.logoEmoji}>🎯</Text>
+        <Text style={styles.title}>Welcome Back</Text>
+        <Text style={styles.subtitle}>Sign in to sync your progress</Text>
+      </View>
+
+      {/* Form */}
+      <View style={styles.form}>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            placeholderTextColor={palette.textDim}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!loading}
+          />
         </View>
 
-        {/* Form */}
-        <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor={palette.textDim}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Password</Text>
+          <TextInput
+            style={styles.input}
+            value={password}
+            onChangeText={setPassword}
+            placeholder="••••••••"
+            placeholderTextColor={palette.textDim}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!loading}
+          />
+        </View>
+
+        {error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
           </View>
+        ) : null}
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              placeholderTextColor={palette.textDim}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
-          </View>
+        <Pressable
+          onPress={handleSignIn}
+          disabled={loading}
+          style={({pressed}) => [
+            styles.signInButton,
+            pressed && !loading && styles.signInButtonPressed,
+          ]}>
+          <LinearGradient
+            colors={[palette.gradientStart, palette.gradientEnd]}
+            start={{x: 0, y: 0}}
+            end={{x: 1, y: 1}}
+            style={styles.signInButtonGradient}>
+            {loading ? (
+              <ActivityIndicator color={palette.textPrimary} />
+            ) : (
+              <Text style={styles.signInButtonText}>Sign In</Text>
+            )}
+          </LinearGradient>
+        </Pressable>
+      </View>
 
-          {error ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          <Pressable
-            onPress={handleSignIn}
-            disabled={loading}
-            style={({pressed}) => [
-              styles.signInButton,
-              pressed && !loading && styles.signInButtonPressed,
-            ]}>
-            <LinearGradient
-              colors={[palette.gradientStart, palette.gradientEnd]}
-              start={{x: 0, y: 0}}
-              end={{x: 1, y: 1}}
-              style={styles.signInButtonGradient}>
-              {loading ? (
-                <ActivityIndicator color={palette.textPrimary} />
-              ) : (
-                <Text style={styles.signInButtonText}>Sign In</Text>
-              )}
-            </LinearGradient>
-          </Pressable>
-        </View>
-
-        {/* Sign Up Link */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account? </Text>
-          <Pressable onPress={onNavigateToSignUp} disabled={loading}>
-            <Text style={styles.footerLink}>Sign Up</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      {/* Sign Up Link */}
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>Don't have an account? </Text>
+        <Pressable onPress={onNavigateToSignUp} disabled={loading}>
+          <Text style={styles.footerLink}>Sign Up</Text>
+        </Pressable>
+      </View>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -247,6 +243,10 @@ const styles = StyleSheet.create({
     color: palette.primary,
   },
 });
+
+
+
+
 
 
 

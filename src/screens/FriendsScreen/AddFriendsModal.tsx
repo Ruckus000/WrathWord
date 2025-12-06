@@ -1,14 +1,6 @@
 import React, {useState, useCallback, useMemo, useEffect} from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Modal,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+import {View, Text, StyleSheet, Pressable, Modal} from 'react-native';
+import {KeyboardAwareScrollView} from 'react-native-keyboard-controller';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {palette} from '../../theme/colors';
 import {XIcon} from '../../components/icons/SettingsIcons';
@@ -151,9 +143,7 @@ export default function AddFriendsModal({visible, onClose}: Props) {
       transparent
       animationType="slide"
       onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onClose} />
 
         <View style={[styles.sheet, {paddingBottom: insets.bottom + 20}]}>
@@ -207,7 +197,7 @@ export default function AddFriendsModal({visible, onClose}: Props) {
           </View>
 
           {/* Content */}
-          <ScrollView
+          <KeyboardAwareScrollView
             style={styles.content}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
@@ -330,9 +320,9 @@ export default function AddFriendsModal({visible, onClose}: Props) {
                   )}
               </>
             )}
-          </ScrollView>
+          </KeyboardAwareScrollView>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
