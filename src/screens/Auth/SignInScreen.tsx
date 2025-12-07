@@ -12,6 +12,7 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {palette} from '../../theme/colors';
@@ -132,6 +133,13 @@ export default function SignInScreen({
     }
   };
 
+  const handleSocialLogin = () => {
+    Alert.alert(
+      'Coming Soon',
+      'Social login will be available in a future update.',
+    );
+  };
+
   return (
     <View
       style={[
@@ -234,6 +242,7 @@ export default function SignInScreen({
         {/* Social Buttons */}
         <View style={styles.socialButtons}>
           <Pressable
+            onPress={handleSocialLogin}
             style={({pressed}) => [
               styles.socialButton,
               pressed && styles.socialButtonPressed,
@@ -242,6 +251,7 @@ export default function SignInScreen({
             <Text style={styles.socialButtonText}>Google</Text>
           </Pressable>
           <Pressable
+            onPress={handleSocialLogin}
             style={({pressed}) => [
               styles.socialButton,
               pressed && styles.socialButtonPressed,
