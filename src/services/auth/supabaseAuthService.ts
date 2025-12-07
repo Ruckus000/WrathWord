@@ -287,6 +287,34 @@ class SupabaseAuthService implements IAuthService {
       subscription.unsubscribe();
     };
   }
+
+  async resetPassword(email: string): Promise<AuthResult<{message: string}>> {
+    const supabase = getSupabase();
+    if (!supabase) {
+      return {
+        data: null,
+        error: {message: 'Supabase not configured', code: 'NO_SUPABASE'},
+      };
+    }
+
+    try {
+      const {error} = await supabase.auth.resetPasswordForEmail(email);
+
+      if (error) {
+        return {data: null, error: {message: error.message, code: error.code}};
+      }
+
+      return {
+        data: {message: 'Check your email for reset instructions'},
+        error: null,
+      };
+    } catch (err) {
+      return {
+        data: null,
+        error: {message: err instanceof Error ? err.message : 'Unknown error'},
+      };
+    }
+  }
 }
 
 export const supabaseAuthService = new SupabaseAuthService();

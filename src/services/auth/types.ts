@@ -66,6 +66,11 @@ export interface IAuthService {
   onAuthStateChange(
     callback: (session: AuthSession | null) => void,
   ): () => void;
+
+  /**
+   * Send a password reset email
+   */
+  resetPassword(email: string): Promise<AuthResult<{message: string}>>;
 }
 
 

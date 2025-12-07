@@ -136,6 +136,13 @@ class MockAuthService implements IAuthService {
       }
     };
   }
+
+  async resetPassword(): Promise<AuthResult<{message: string}>> {
+    return {
+      data: null,
+      error: {message: 'Password reset not available in dev mode'},
+    };
+  }
 }
 
 export const mockAuthService = new MockAuthService();

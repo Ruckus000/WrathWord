@@ -71,6 +71,8 @@ export default function SignInScreen({
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleSignIn = async () => {
     setError('');
@@ -91,11 +93,42 @@ export default function SignInScreen({
         return;
       }
 
-      // Success
-      onSignInSuccess();
+      // Success - auth state change will update isAuthenticated
+      // which triggers navigation automatically via AuthContext
+      setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign in');
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setError('');
+    setResetSent(false);
+
+    if (!email) {
+      setError('Please enter your email address');
+      return;
+    }
+
+    setResetLoading(true);
+
+    try {
+      const result = await authService.resetPassword(email);
+
+      if (result.error) {
+        setError(result.error.message);
+        setResetLoading(false);
+        return;
+      }
+
+      setResetSent(true);
+      setResetLoading(false);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to send reset email',
+      );
+      setResetLoading(false);
     }
   };
 
@@ -147,13 +180,26 @@ export default function SignInScreen({
             />
           </View>
 
-          <Pressable style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+          <Pressable
+            onPress={handleForgotPassword}
+            disabled={resetLoading || loading}
+            style={styles.forgotPassword}>
+            <Text style={styles.forgotPasswordText}>
+              {resetLoading ? 'Sending...' : 'Forgot password?'}
+            </Text>
           </Pressable>
 
           {error ? (
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          {resetSent ? (
+            <View style={styles.successContainer}>
+              <Text style={styles.successText}>
+                Check your email for reset instructions
+              </Text>
             </View>
           ) : null}
 
@@ -277,6 +323,19 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: palette.destructive,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  successContainer: {
+    backgroundColor: 'rgba(62, 184, 176, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(62, 184, 176, 0.2)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  successText: {
+    color: palette.accentTeal,
     fontSize: 14,
     textAlign: 'center',
   },
