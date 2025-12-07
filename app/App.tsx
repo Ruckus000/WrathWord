@@ -1,14 +1,14 @@
 // app/App.tsx
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {KeyboardProvider} from 'react-native-keyboard-controller';
-import {View, ActivityIndicator, StyleSheet} from 'react-native';
+import BootSplash from 'react-native-bootsplash';
+
 import GameScreen from '../src/screens/GameScreen';
 import StatsScreen from '../src/screens/StatsScreen';
 import FriendsScreen from '../src/screens/FriendsScreen';
 import {SignInScreen, SignUpScreen} from '../src/screens/Auth';
 import {AuthProvider, useAuth} from '../src/contexts/AuthContext';
-import {palette} from '../src/theme/colors';
 
 type Screen = 'game' | 'stats' | 'friends' | 'signin' | 'signup';
 
@@ -16,13 +16,16 @@ function AppContent() {
   const {isAuthenticated, loading, isDevelopmentMode} = useAuth();
   const [currentScreen, setCurrentScreen] = useState<Screen>('game');
 
-  // Show loading screen while checking auth state
+  // Hide splash screen when auth loading completes
+  useEffect(() => {
+    if (!loading) {
+      BootSplash.hide({fade: true, duration: 250});
+    }
+  }, [loading]);
+
+  // Keep showing splash while loading (return null keeps bootsplash visible)
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={palette.primary} />
-      </View>
-    );
+    return null;
   }
 
   // In production mode, show auth screens if not authenticated
@@ -79,11 +82,3 @@ export default function App() {
   );
 }
 
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: palette.bg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});

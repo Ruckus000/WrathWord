@@ -7,8 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		09FE237AAF654A9C899564EB /* Colors.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ACC74D8A544946B894EC6C80 /* Colors.xcassets */; };
 		0C80B921A6F3F58F76C31292 /* libPods-WrathWord.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-WrathWord.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		21BD524A7F0A4E55B8D4C3DB /* BootSplash.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = BE022D892186486FB5AA0377 /* BootSplash.storyboard */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		A1B2C3D4E5F60718293A4B5C /* AppDelegate.mm in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5B /* AppDelegate.mm */; };
 		A1B2C3D4E5F60718293A4B5F /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5E /* main.m */; };
@@ -27,6 +29,8 @@
 		A1B2C3D4E5F60718293A4B5A /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AppDelegate.h; path = WrathWord/AppDelegate.h; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5B /* AppDelegate.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = AppDelegate.mm; path = WrathWord/AppDelegate.mm; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5E /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = main.m; path = WrathWord/main.m; sourceTree = "<group>"; };
+		ACC74D8A544946B894EC6C80 /* Colors.xcassets */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = folder.assetcatalog; name = Colors.xcassets; path = WrathWord/Colors.xcassets; sourceTree = "<group>"; };
+		BE022D892186486FB5AA0377 /* BootSplash.storyboard */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = BootSplash.storyboard; path = WrathWord/BootSplash.storyboard; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -52,6 +56,8 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
+				BE022D892186486FB5AA0377 /* BootSplash.storyboard */,
+				ACC74D8A544946B894EC6C80 /* Colors.xcassets */,
 			);
 			name = WrathWord;
 			sourceTree = "<group>";
@@ -166,6 +172,8 @@
 				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				ECA59B458A7861FEAB787E73 /* PrivacyInfo.xcprivacy in Resources */,
+				21BD524A7F0A4E55B8D4C3DB /* BootSplash.storyboard in Resources */,
+				09FE237AAF654A9C899564EB /* Colors.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
