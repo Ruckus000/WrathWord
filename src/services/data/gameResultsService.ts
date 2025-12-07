@@ -6,7 +6,7 @@
  */
 
 import {isDevelopment} from '../../config/environment';
-import {supabase} from '../supabase/client';
+import {getSupabase} from '../supabase/client';
 import {TileState} from '../../logic/evaluateGuess';
 import {recordGameResult as recordLocal} from '../../storage/profile';
 
@@ -75,6 +75,7 @@ class SupabaseGameResultsService implements IGameResultsService {
       date: result.date,
     });
 
+    const supabase = getSupabase();
     if (!supabase) {
       return;
     }
@@ -102,6 +103,7 @@ class SupabaseGameResultsService implements IGameResultsService {
   }
 
   async getRecentGames(limit = 10): Promise<GameResult[]> {
+    const supabase = getSupabase();
     if (!supabase) {
       return [];
     }
@@ -140,6 +142,7 @@ class SupabaseGameResultsService implements IGameResultsService {
   }
 
   async getGamesForDate(date: string): Promise<GameResult[]> {
+    const supabase = getSupabase();
     if (!supabase) {
       return [];
     }

@@ -6,7 +6,7 @@
  */
 
 import {isDevelopment} from '../../config/environment';
-import {supabase} from '../supabase/client';
+import {getSupabase} from '../supabase/client';
 import {
   UserProfile,
   LengthStats,
@@ -78,6 +78,7 @@ class MockProfileService implements IProfileService {
  */
 class SupabaseProfileService implements IProfileService {
   async getProfile(): Promise<UserProfile> {
+    const supabase = getSupabase();
     if (!supabase) {
       return getLocalProfile();
     }
@@ -114,6 +115,7 @@ class SupabaseProfileService implements IProfileService {
     const profile = getLocalProfile();
     saveLocalProfile({...profile, ...updates});
 
+    const supabase = getSupabase();
     if (!supabase) {
       return;
     }
@@ -144,6 +146,7 @@ class SupabaseProfileService implements IProfileService {
     // Store locally
     setLocalDisplayName(displayName);
 
+    const supabase = getSupabase();
     if (!supabase) {
       return;
     }
@@ -175,6 +178,7 @@ class SupabaseProfileService implements IProfileService {
   }
 
   async syncStats(): Promise<void> {
+    const supabase = getSupabase();
     if (!supabase) {
       return;
     }

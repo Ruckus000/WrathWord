@@ -5,7 +5,7 @@
  * Used in production mode when Supabase is configured.
  */
 
-import {supabase} from '../supabase/client';
+import {getSupabase} from '../supabase/client';
 import {
   IAuthService,
   AuthUser,
@@ -20,6 +20,7 @@ class SupabaseAuthService implements IAuthService {
     password: string,
     username: string,
   ): Promise<AuthResult<AuthSession>> {
+    const supabase = getSupabase();
     if (!supabase) {
       return {
         data: null,
@@ -88,6 +89,7 @@ class SupabaseAuthService implements IAuthService {
     email: string,
     password: string,
   ): Promise<AuthResult<AuthSession>> {
+    const supabase = getSupabase();
     if (!supabase) {
       return {
         data: null,
@@ -143,6 +145,7 @@ class SupabaseAuthService implements IAuthService {
   }
 
   async signOut(): Promise<AuthResult<void>> {
+    const supabase = getSupabase();
     if (!supabase) {
       return {
         data: null,
@@ -165,6 +168,7 @@ class SupabaseAuthService implements IAuthService {
   }
 
   async getCurrentUser(): Promise<AuthUser | null> {
+    const supabase = getSupabase();
     if (!supabase) {
       return null;
     }
@@ -199,6 +203,7 @@ class SupabaseAuthService implements IAuthService {
   }
 
   async getSession(): Promise<AuthSession | null> {
+    const supabase = getSupabase();
     if (!supabase) {
       console.log('[Auth] Supabase not configured');
       return null;
@@ -244,6 +249,7 @@ class SupabaseAuthService implements IAuthService {
   onAuthStateChange(
     callback: (session: AuthSession | null) => void,
   ): () => void {
+    const supabase = getSupabase();
     if (!supabase) {
       return () => {};
     }
@@ -257,7 +263,7 @@ class SupabaseAuthService implements IAuthService {
       }
 
       // Get user profile (supabase is guaranteed non-null here since we checked above)
-      const {data: profile} = await supabase!
+      const {data: profile} = await supabase
         .from('profiles')
         .select('username, display_name, friend_code')
         .eq('user_id', session.user.id)

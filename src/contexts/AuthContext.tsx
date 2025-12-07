@@ -48,9 +48,9 @@ export function AuthProvider({children}: AuthProviderProps) {
     // Get initial session with timeout to prevent infinite loading
     const initAuth = async () => {
       try {
-        // Add a 10 second timeout
+        // Add a 3 second timeout - faster UX, show sign-in if slow
         const timeoutPromise = new Promise<null>(resolve =>
-          setTimeout(() => resolve(null), 10000),
+          setTimeout(() => resolve(null), 3000),
         );
         const sessionPromise = authService.getSession();
 

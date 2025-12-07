@@ -6,7 +6,7 @@
  */
 
 import {isDevelopment} from '../../config/environment';
-import {supabase} from '../supabase/client';
+import {getSupabase} from '../supabase/client';
 import {Friend} from '../../data/mockFriends';
 import {MOCK_FRIENDS} from '../../data/mockFriends';
 import {
@@ -117,6 +117,7 @@ class SupabaseFriendsService implements IFriendsService {
   private async getTodayResults(
     userIds: string[],
   ): Promise<Map<string, {won: boolean; guesses: number; feedback?: any}>> {
+    const supabase = getSupabase();
     if (!supabase || userIds.length === 0) {
       return new Map();
     }
@@ -154,6 +155,7 @@ class SupabaseFriendsService implements IFriendsService {
   private async getLastPlayedStatus(
     userId: string,
   ): Promise<'today' | 'yesterday' | 'inactive'> {
+    const supabase = getSupabase();
     if (!supabase) {
       return 'inactive';
     }
@@ -187,6 +189,7 @@ class SupabaseFriendsService implements IFriendsService {
     }
   }
   async getFriends(): Promise<Friend[]> {
+    const supabase = getSupabase();
     if (!supabase) {
       return [];
     }
@@ -248,6 +251,7 @@ class SupabaseFriendsService implements IFriendsService {
   }
 
   async searchUserByFriendCode(friendCode: string): Promise<Friend | null> {
+    const supabase = getSupabase();
     if (!supabase) {
       return null;
     }
@@ -286,6 +290,7 @@ class SupabaseFriendsService implements IFriendsService {
   }
 
   async sendFriendRequest(toUserId: string): Promise<void> {
+    const supabase = getSupabase();
     if (!supabase) {
       return;
     }
@@ -307,6 +312,7 @@ class SupabaseFriendsService implements IFriendsService {
   }
 
   async acceptFriendRequest(requestId: string): Promise<void> {
+    const supabase = getSupabase();
     if (!supabase) {
       return;
     }
@@ -320,6 +326,7 @@ class SupabaseFriendsService implements IFriendsService {
   }
 
   async declineFriendRequest(requestId: string): Promise<void> {
+    const supabase = getSupabase();
     if (!supabase) {
       return;
     }
@@ -335,6 +342,7 @@ class SupabaseFriendsService implements IFriendsService {
   }
 
   async getIncomingRequests(): Promise<FriendRequest[]> {
+    const supabase = getSupabase();
     if (!supabase) {
       return [];
     }
@@ -363,6 +371,7 @@ class SupabaseFriendsService implements IFriendsService {
   }
 
   async getOutgoingRequests(): Promise<FriendRequest[]> {
+    const supabase = getSupabase();
     if (!supabase) {
       return [];
     }
@@ -391,6 +400,7 @@ class SupabaseFriendsService implements IFriendsService {
   }
 
   async getGlobalLeaderboard(limit = 20): Promise<Friend[]> {
+    const supabase = getSupabase();
     if (!supabase) {
       return [];
     }
@@ -451,6 +461,7 @@ class SupabaseFriendsService implements IFriendsService {
   }
 
   async getFriendsLeaderboard(): Promise<Friend[]> {
+    const supabase = getSupabase();
     if (!supabase) {
       return [];
     }

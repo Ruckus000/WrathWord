@@ -1,6 +1,6 @@
 /**
  * Sign In Screen
- * 
+ *
  * Allows users to sign in with email and password.
  * Only used in production mode - bypassed in development.
  */
@@ -9,21 +9,58 @@ import React, {useState} from 'react';
 import {
   View,
   Text,
-  TextInput,
   Pressable,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {KeyboardAwareScrollView} from 'react-native-keyboard-controller';
 import {palette} from '../../theme/colors';
 import {authService} from '../../services/auth';
 import LinearGradient from 'react-native-linear-gradient';
+import {Logo} from '../../components/Logo';
+import {AuthInput} from '../../components/AuthInput';
+import {AuthBackground} from '../../components/AuthBackground';
+import Svg, {Path} from 'react-native-svg';
 
 type Props = {
   onSignInSuccess: () => void;
   onNavigateToSignUp: () => void;
 };
+
+// Simple social icons
+function GoogleIcon() {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+        fill="#4285F4"
+      />
+      <Path
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        fill="#34A853"
+      />
+      <Path
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+        fill="#FBBC05"
+      />
+      <Path
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+        fill="#EA4335"
+      />
+    </Svg>
+  );
+}
+
+function AppleIcon() {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"
+        fill={palette.textPrimary}
+      />
+    </Svg>
+  );
+}
 
 export default function SignInScreen({
   onSignInSuccess,
@@ -63,85 +100,120 @@ export default function SignInScreen({
   };
 
   return (
-    <KeyboardAwareScrollView
-      style={[styles.container, {paddingTop: insets.top}]}
-      contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
-      bottomOffset={insets.bottom}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.logoEmoji}>🎯</Text>
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Sign in to sync your progress</Text>
-      </View>
+    <View
+      style={[
+        styles.container,
+        {paddingTop: insets.top, paddingBottom: insets.bottom},
+      ]}>
+      <AuthBackground />
 
-      {/* Form */}
-      <View style={styles.form}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            placeholderTextColor={palette.textDim}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!loading}
-          />
+      <View style={styles.content}>
+        {/* Brand Header */}
+        <View style={styles.header}>
+          <Logo size="large" />
+          <Text style={styles.wordmark}>WrathWord</Text>
+          <Text style={styles.tagline}>
+            Compete with friends. One word at a time.
+          </Text>
         </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="••••••••"
-            placeholderTextColor={palette.textDim}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!loading}
-          />
-        </View>
-
-        {error ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
+        {/* Form */}
+        <View style={styles.form}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email</Text>
+            <AuthInput
+              icon="email"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="you@example.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!loading}
+            />
           </View>
-        ) : null}
 
-        <Pressable
-          onPress={handleSignIn}
-          disabled={loading}
-          style={({pressed}) => [
-            styles.signInButton,
-            pressed && !loading && styles.signInButtonPressed,
-          ]}>
-          <LinearGradient
-            colors={[palette.gradientStart, palette.gradientEnd]}
-            start={{x: 0, y: 0}}
-            end={{x: 1, y: 1}}
-            style={styles.signInButtonGradient}>
-            {loading ? (
-              <ActivityIndicator color={palette.textPrimary} />
-            ) : (
-              <Text style={styles.signInButtonText}>Sign In</Text>
-            )}
-          </LinearGradient>
-        </Pressable>
-      </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Password</Text>
+            <AuthInput
+              icon="password"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Enter your password"
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!loading}
+            />
+          </View>
 
-      {/* Sign Up Link */}
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Don't have an account? </Text>
-        <Pressable onPress={onNavigateToSignUp} disabled={loading}>
-          <Text style={styles.footerLink}>Sign Up</Text>
-        </Pressable>
+          <Pressable style={styles.forgotPassword}>
+            <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+          </Pressable>
+
+          {error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            onPress={handleSignIn}
+            disabled={loading}
+            style={({pressed}) => [
+              styles.signInButton,
+              pressed && !loading && styles.signInButtonPressed,
+            ]}>
+            <LinearGradient
+              colors={[palette.gradientStart, palette.gradientEnd]}
+              start={{x: 0, y: 0}}
+              end={{x: 1, y: 1}}
+              style={styles.signInButtonGradient}>
+              {loading ? (
+                <ActivityIndicator color={palette.textPrimary} />
+              ) : (
+                <Text style={styles.signInButtonText}>Sign In</Text>
+              )}
+            </LinearGradient>
+          </Pressable>
+        </View>
+
+        {/* Divider */}
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or continue with</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        {/* Social Buttons */}
+        <View style={styles.socialButtons}>
+          <Pressable
+            style={({pressed}) => [
+              styles.socialButton,
+              pressed && styles.socialButtonPressed,
+            ]}>
+            <GoogleIcon />
+            <Text style={styles.socialButtonText}>Google</Text>
+          </Pressable>
+          <Pressable
+            style={({pressed}) => [
+              styles.socialButton,
+              pressed && styles.socialButtonPressed,
+            ]}>
+            <AppleIcon />
+            <Text style={styles.socialButtonText}>Apple</Text>
+          </Pressable>
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Don't have an account? </Text>
+          <Pressable onPress={onNavigateToSignUp} disabled={loading}>
+            <Text style={styles.footerLink}>Sign Up</Text>
+          </Pressable>
+        </View>
       </View>
-    </KeyboardAwareScrollView>
+    </View>
   );
 }
 
@@ -150,34 +222,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: palette.bg,
   },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
+  content: {
+    flex: 1,
     paddingHorizontal: 24,
+    justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: 40,
   },
-  logoEmoji: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
+  wordmark: {
+    fontSize: 32,
+    fontWeight: '800',
     color: palette.textPrimary,
+    marginTop: 20,
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
-  subtitle: {
+  tagline: {
     fontSize: 15,
     color: palette.textMuted,
+    textAlign: 'center',
   },
   form: {
-    marginBottom: 32,
+    marginBottom: 24,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   label: {
     fontSize: 13,
@@ -187,15 +258,14 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  input: {
-    backgroundColor: palette.card,
-    borderWidth: 1,
-    borderColor: palette.cardBorder,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: palette.textPrimary,
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginTop: -8,
+    marginBottom: 20,
+  },
+  forgotPasswordText: {
+    fontSize: 13,
+    color: palette.textMuted,
   },
   errorContainer: {
     backgroundColor: 'rgba(255, 69, 58, 0.1)',
@@ -203,7 +273,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 69, 58, 0.2)',
     borderRadius: 8,
     padding: 12,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   errorText: {
     color: palette.destructive,
@@ -228,6 +298,49 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: palette.textPrimary,
   },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    gap: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: palette.cardBorder,
+  },
+  dividerText: {
+    fontSize: 13,
+    color: palette.textDim,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  socialButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 32,
+  },
+  socialButton: {
+    flex: 1,
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.cardBorder,
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  socialButtonPressed: {
+    opacity: 0.8,
+    backgroundColor: palette.cardHighlight,
+  },
+  socialButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: palette.textPrimary,
+  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -240,13 +353,6 @@ const styles = StyleSheet.create({
   footerLink: {
     fontSize: 14,
     fontWeight: '600',
-    color: palette.primary,
+    color: palette.accentTeal,
   },
 });
-
-
-
-
-
-
-

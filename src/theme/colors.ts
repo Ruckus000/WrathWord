@@ -74,4 +74,13 @@ export const palette = {
   // High Contrast variants (colorblind-friendly)
   correctHighContrast: '#f5793a', // Orange
   presentHighContrast: '#85c0f9', // Light blue
+
+  // Logo colors
+  logoNavy: '#1a2634',
+  logoCream: '#f5f0e6',
+
+  // Teal accent (from logo)
+  accentTeal: '#3eb8b0',
+  accentTealDim: 'rgba(62, 184, 176, 0.15)',
+  accentTealBorder: 'rgba(62, 184, 176, 0.3)',
 };

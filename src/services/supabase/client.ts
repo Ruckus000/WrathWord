@@ -3,6 +3,9 @@
  *
  * This module initializes and exports the Supabase client for use throughout the app.
  * Uses MMKV for session persistence to maintain auth state across app restarts.
+ *
+ * PERFORMANCE: Uses lazy initialization to avoid blocking app startup.
+ * The client is only created when first accessed via getSupabase().
  */
 
 // URL polyfill required for Supabase in React Native
@@ -10,20 +13,30 @@ import 'react-native-url-polyfill/auto';
 
 import {createClient, SupabaseClient} from '@supabase/supabase-js';
 import {supabaseConfig, shouldUseSupabase} from '../../config/environment';
-import {kv} from '../../storage/mmkv';
 
-// Custom storage adapter using MMKV for auth persistence
-const mmkvStorage = {
-  getItem: (key: string) => {
-    return kv.getString(key) ?? null;
-  },
-  setItem: (key: string, value: string) => {
-    kv.set(key, value);
-  },
-  removeItem: (key: string) => {
-    kv.remove(key);
-  },
-};
+// Lazy-loaded MMKV storage adapter
+let _mmkvStorage: {
+  getItem: (key: string) => string | null;
+  setItem: (key: string, value: string) => void;
+  removeItem: (key: string) => void;
+} | null = null;
+
+function getMmkvStorage() {
+  if (!_mmkvStorage) {
+    // Only import MMKV when actually needed
+    const {kv} = require('../../storage/mmkv');
+    _mmkvStorage = {
+      getItem: (key: string) => kv.getString(key) ?? null,
+      setItem: (key: string, value: string) => kv.set(key, value),
+      removeItem: (key: string) => kv.remove(key),
+    };
+  }
+  return _mmkvStorage;
+}
+
+// Cached client instance for lazy initialization
+let _supabase: SupabaseClient | null = null;
+let _initialized = false;
 
 /**
  * Initialize Supabase client with MMKV storage adapter
@@ -33,8 +46,6 @@ function initializeSupabase(): SupabaseClient | null {
   console.log('[Supabase] Initializing, shouldUseSupabase:', shouldUseSupabase());
 
   if (!shouldUseSupabase()) {
-    // Return null in dev mode or if not configured
-    // Services will check for this and use mock implementations
     console.log('[Supabase] Skipping - dev mode or not configured');
     return null;
   }
@@ -43,7 +54,7 @@ function initializeSupabase(): SupabaseClient | null {
     console.log('[Supabase] Creating client...');
     const client = createClient(supabaseConfig.url, supabaseConfig.anonKey, {
       auth: {
-        storage: mmkvStorage,
+        storage: getMmkvStorage(),
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
@@ -58,16 +69,28 @@ function initializeSupabase(): SupabaseClient | null {
 }
 
 /**
- * Singleton Supabase client instance
- * Will be null in development mode or if not configured
+ * Get the Supabase client instance (lazy initialization)
+ * Returns null in development mode or if not configured
  */
-export const supabase = initializeSupabase();
+export function getSupabase(): SupabaseClient | null {
+  if (!_initialized) {
+    _initialized = true;
+    _supabase = initializeSupabase();
+  }
+  return _supabase;
+}
+
+/**
+ * Legacy export for backwards compatibility
+ * @deprecated Use getSupabase() instead for lazy initialization
+ */
+export const supabase = null as SupabaseClient | null;
 
 /**
  * Check if Supabase client is available and ready to use
  */
 export function isSupabaseAvailable(): boolean {
-  return supabase !== null;
+  return getSupabase() !== null;
 }
 
 /**
