@@ -15,6 +15,11 @@ export type {IFriendsService} from './friendsService';
 export {gameResultsService, getGameResultsService} from './gameResultsService';
 export type {IGameResultsService, GameResult} from './gameResultsService';
 
+export {competitionService, getCompetitionService} from './competitionService';
+export type {ICompetitionService, CompetitionData, FriendAvatar} from './competitionService';
+
+
+
 
 
 

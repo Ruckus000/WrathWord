@@ -1,5 +1,6 @@
 // src/storage/profile.ts
 import {getJSON, setJSON, kv} from './mmkv';
+import {getScopedKey, getCurrentUserId} from './userScope';
 
 export type UserProfile = {
   id: string;
@@ -32,7 +33,12 @@ export type UserPreferences = {
   highContrastEnabled: boolean;
 };
 
-const PROFILE_KEY = 'user.profile';
+const PROFILE_BASE_KEY = 'user.profile';
+
+// Get the scoped profile key for the current user
+function getProfileKey(): string | null {
+  return getScopedKey(PROFILE_BASE_KEY);
+}
 
 // Generate a simple UUID
 function generateUUID(): string {
@@ -57,9 +63,9 @@ function initLengthStats(): LengthStats {
   };
 }
 
-// Create new profile
-function createProfile(): UserProfile {
-  const profile: UserProfile = {
+// Create default profile (used when no user is logged in or for new users)
+function createDefaultProfile(): UserProfile {
+  return {
     id: generateUUID(),
     createdAt: Date.now(),
     stats: {
@@ -77,23 +83,40 @@ function createProfile(): UserProfile {
       highContrastEnabled: false,
     },
   };
+}
 
-  setJSON(PROFILE_KEY, profile);
+// Create new profile for current user and save it
+function createProfile(): UserProfile {
+  const profile = createDefaultProfile();
+  const key = getProfileKey();
+  if (key) {
+    setJSON(key, profile);
+  }
   return profile;
 }
 
-// Get or create profile
+// Get or create profile for current user
+// Returns a default empty profile if no user is logged in
 export function getProfile(): UserProfile {
-  const existing = getJSON<UserProfile | null>(PROFILE_KEY, null);
+  const key = getProfileKey();
+  if (!key) {
+    // No user logged in - return default profile (not persisted)
+    return createDefaultProfile();
+  }
+
+  const existing = getJSON<UserProfile | null>(key, null);
   if (existing) {
     return existing;
   }
   return createProfile();
 }
 
-// Save profile
+// Save profile for current user
 export function saveProfile(profile: UserProfile): void {
-  setJSON(PROFILE_KEY, profile);
+  const key = getProfileKey();
+  if (key) {
+    setJSON(key, profile);
+  }
 }
 
 // Update preferences

@@ -2,7 +2,9 @@ import React from 'react';
 import {View, Text, StyleSheet, Pressable, Modal} from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {palette} from '../../theme/colors';
-import {Friend, MOCK_USER} from '../../data/mockFriends';
+import {Friend} from '../../data/mockFriends';
+import {useUserStats} from '../../hooks';
+import {useAuth} from '../../contexts/AuthContext';
 
 type Props = {
   visible: boolean;
@@ -19,40 +21,47 @@ type StatRow = {
 };
 
 export default function HeadToHeadModal({visible, friend, onClose}: Props) {
+  // Get real user data
+  const {user} = useAuth();
+  const userStats = useUserStats();
+
   if (!friend) return null;
+
+  // Get user's display letter
+  const userLetter = (user?.displayName ?? user?.username ?? 'Y')[0].toUpperCase();
 
   const stats: StatRow[] = [
     {
       label: 'Win Rate',
-      you: MOCK_USER.stats.winRate,
+      you: userStats.winRate,
       them: friend.stats.winRate,
       format: (v: number) => `${v}%`,
       lowerIsBetter: false,
     },
     {
       label: 'Avg. Guesses',
-      you: MOCK_USER.stats.avgGuesses,
+      you: userStats.avgGuesses,
       them: friend.stats.avgGuesses,
       format: (v: number) => v.toFixed(1),
       lowerIsBetter: true,
     },
     {
       label: 'Current Streak',
-      you: MOCK_USER.streak,
+      you: userStats.currentStreak,
       them: friend.streak,
       format: (v: number) => String(v),
       lowerIsBetter: false,
     },
     {
       label: 'Best Streak',
-      you: MOCK_USER.stats.maxStreak,
+      you: userStats.maxStreak,
       them: friend.stats.maxStreak,
       format: (v: number) => String(v),
       lowerIsBetter: false,
     },
     {
       label: 'Games Played',
-      you: MOCK_USER.stats.played,
+      you: userStats.played,
       them: friend.stats.played,
       format: (v: number) => String(v),
       lowerIsBetter: false,
@@ -76,7 +85,7 @@ export default function HeadToHeadModal({visible, friend, onClose}: Props) {
                   start={{x: 0, y: 0}}
                   end={{x: 1, y: 1}}
                   style={styles.avatar}>
-                  <Text style={styles.avatarText}>{MOCK_USER.letter}</Text>
+                  <Text style={styles.avatarText}>{userLetter}</Text>
                 </LinearGradient>
                 <Text style={styles.playerName}>You</Text>
               </View>

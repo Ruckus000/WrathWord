@@ -1,8 +1,10 @@
 import React, {useEffect, useState} from 'react';
 import {View, Text, StyleSheet, ScrollView, ActivityIndicator} from 'react-native';
 import {palette} from '../../theme/colors';
-import {Friend, MOCK_USER} from '../../data/mockFriends';
+import {Friend} from '../../data/mockFriends';
 import {friendsService} from '../../services/data';
+import {useUserTodayResult, useUserStats} from '../../hooks';
+import {useAuth} from '../../contexts/AuthContext';
 import {Period} from './SegmentControl';
 import ScopeToggle, {Scope} from './ScopeToggle';
 import LeaderboardRow from './LeaderboardRow';
@@ -29,6 +31,11 @@ export default function Leaderboard({
   const [globalUsers, setGlobalUsers] = useState<Friend[]>([]);
   const [loadingGlobal, setLoadingGlobal] = useState(false);
 
+  // Get real user data
+  const {user} = useAuth();
+  const userTodayResult = useUserTodayResult();
+  const userStats = useUserStats();
+
   // Load global leaderboard when scope changes to global
   useEffect(() => {
     if (scope === 'global' && globalUsers.length === 0) {
@@ -51,7 +58,8 @@ export default function Leaderboard({
   // Determine data source and user rank based on scope
   const users = scope === 'friends' ? friends : globalUsers;
   // Calculate global rank based on position in leaderboard
-  const globalRankIndex = globalUsers.findIndex(u => u.id === MOCK_USER.id);
+  const userId = user?.id ?? 'current-user';
+  const globalRankIndex = globalUsers.findIndex(u => u.id === userId);
   const currentUserRank = scope === 'friends' ? userRank : (globalRankIndex >= 0 ? globalRankIndex + 1 : globalUsers.length + 1);
 
   // Sort users based on period
@@ -111,14 +119,26 @@ export default function Leaderboard({
 
   // Create a "friend" object for the user to pass to LeaderboardRow
   const userAsFriend: Friend = {
-    id: MOCK_USER.id,
-    name: MOCK_USER.name,
-    letter: MOCK_USER.letter,
-    friendCode: MOCK_USER.friendCode,
-    streak: MOCK_USER.streak,
-    lastPlayed: 'today',
-    todayResult: MOCK_USER.todayResult,
-    stats: MOCK_USER.stats,
+    id: userId,
+    name: user?.displayName ?? user?.username ?? 'You',
+    letter: (user?.displayName ?? user?.username ?? 'Y')[0].toUpperCase(),
+    friendCode: user?.friendCode ?? '',
+    streak: userStats.currentStreak,
+    lastPlayed: userPlayedToday ? 'today' : 'inactive',
+    todayResult: userTodayResult
+      ? {
+          won: userTodayResult.won,
+          guesses: userTodayResult.guesses,
+          feedback: userTodayResult.feedback,
+        }
+      : undefined,
+    stats: {
+      played: userStats.played,
+      won: userStats.won,
+      winRate: userStats.winRate,
+      avgGuesses: userStats.avgGuesses,
+      maxStreak: userStats.maxStreak,
+    },
     h2h: {yourWins: 0, theirWins: 0},
   };
 

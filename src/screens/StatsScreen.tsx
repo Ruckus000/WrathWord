@@ -1,5 +1,5 @@
 // src/screens/StatsScreen.tsx
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import {
   resetStats,
   updatePreferences,
 } from '../storage/profile';
-import {profileService} from '../services/data';
+import {profileService, competitionService, CompetitionData} from '../services/data';
 import {useAuth} from '../contexts/AuthContext';
 import {palette} from '../theme/colors';
 import {Toggle} from '../components/Toggle';
@@ -55,6 +55,25 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
     profile.preferences.highContrastEnabled ?? false,
   );
   const [showProfile, setShowProfile] = useState(false);
+  const [competitionData, setCompetitionData] = useState<CompetitionData | null>(null);
+
+  // Load competition data on mount
+  useEffect(() => {
+    const loadCompetitionData = async () => {
+      try {
+        const data = await competitionService.getTodayCompetition();
+        setCompetitionData(data);
+      } catch (err) {
+        console.error('Failed to load competition data:', err);
+      }
+    };
+
+    loadCompetitionData();
+
+    // Refresh periodically to catch updates
+    const interval = setInterval(loadCompetitionData, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const totalStats = getTotalStats();
   const lengthStats = getStatsForLength(selectedLength);
@@ -164,16 +183,18 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
         </View>
 
         {/* Compete Card */}
-        {onNavigateToFriends && (
+        {onNavigateToFriends && competitionData && (
           <CompeteCard
-            userRank={2}
-            totalPlayed={5}
-            waitingCount={3}
-            topFriends={[
-              {id: '1', name: 'Sarah', letter: 'S', isFirst: true},
-              {id: 'you', name: 'You', letter: 'W', isYou: true},
-              {id: '2', name: 'Mike', letter: 'M'},
-            ]}
+            userRank={competitionData.userRank}
+            totalPlayed={competitionData.totalPlayed}
+            waitingCount={competitionData.waitingCount}
+            topFriends={competitionData.topFriends.map(f => ({
+              ...f,
+              // Update user letter with actual user data
+              letter: f.isYou
+                ? (user?.displayName ?? user?.username ?? 'Y')[0].toUpperCase()
+                : f.letter,
+            }))}
             onPress={onNavigateToFriends}
           />
         )}

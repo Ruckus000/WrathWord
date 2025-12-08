@@ -3,8 +3,9 @@ import {View, Text, StyleSheet, Pressable, ActivityIndicator} from 'react-native
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {palette} from '../../theme/colors';
 import {ChevronLeft, PlusIcon} from '../../components/icons/SettingsIcons';
-import {MOCK_USER, Friend} from '../../data/mockFriends';
+import {Friend} from '../../data/mockFriends';
 import {friendsService} from '../../services/data';
+import {useUserTodayResult, useUserStats} from '../../hooks';
 
 import SegmentControl, {Period} from './SegmentControl';
 import {Scope} from './ScopeToggle';
@@ -25,7 +26,7 @@ type Props = {
 export default function FriendsScreen({
   onBack,
   onPlayNow,
-  userPlayedToday = true,
+  userPlayedToday = false,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('today');
@@ -35,6 +36,10 @@ export default function FriendsScreen({
   const [showAddFriends, setShowAddFriends] = useState(false);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Get actual user data from hooks
+  const userTodayResult = useUserTodayResult();
+  const userStats = useUserStats();
 
   // Load friends on mount
   useEffect(() => {
@@ -68,13 +73,14 @@ export default function FriendsScreen({
   const friendsWaiting = friends.filter(f => f.lastPlayed !== 'today');
 
   // Calculate user rank (based on guesses - lower is better)
-  const userRank = userPlayedToday
-    ? friendsPlayedToday.filter(
-        f =>
-          f.todayResult &&
-          f.todayResult.guesses < MOCK_USER.todayResult.guesses,
-      ).length + 1
-    : 0;
+  const userRank =
+    userPlayedToday && userTodayResult
+      ? friendsPlayedToday.filter(
+          f =>
+            f.todayResult &&
+            f.todayResult.guesses < userTodayResult.guesses,
+        ).length + 1
+      : 0;
 
   if (loading) {
     return (
@@ -118,12 +124,12 @@ export default function FriendsScreen({
 
       <View style={styles.content}>
         {/* Today Card - Different based on play state */}
-        {selectedPeriod === 'today' && userPlayedToday && (
+        {selectedPeriod === 'today' && userPlayedToday && userTodayResult && (
           <TodayCard
             userRank={userRank}
             totalPlayed={friendsPlayedToday.length + 1}
-            guesses={MOCK_USER.todayResult.guesses}
-            feedback={MOCK_USER.todayResult.feedback}
+            guesses={userTodayResult.guesses}
+            feedback={userTodayResult.feedback}
             friendsPlayed={friendsPlayedToday}
             friendsWaiting={friendsWaiting}
           />
@@ -140,8 +146,8 @@ export default function FriendsScreen({
           <AllTimeCard
             userRank={3}
             totalFriends={friends.length}
-            winRate={MOCK_USER.stats.winRate}
-            avgGuesses={MOCK_USER.stats.avgGuesses}
+            winRate={userStats.winRate}
+            avgGuesses={userStats.avgGuesses}
           />
         )}
 

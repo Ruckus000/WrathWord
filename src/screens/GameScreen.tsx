@@ -28,6 +28,7 @@ import {triggerImpact, triggerNotification} from '../utils/haptics';
 import {evaluateGuess, TileState} from '../logic/evaluateGuess';
 import {selectDaily} from '../logic/selectDaily';
 import {getJSON, setJSON} from '../storage/mmkv';
+import {getScopedKey} from '../storage/userScope';
 import {
   getProfile,
   getStatsForLength,
@@ -35,17 +36,28 @@ import {
   markWordAsUsed,
   getUnusedWords,
 } from '../storage/profile';
+
 import {gameResultsService} from '../services/data';
 import {
   generateShareText,
   getResultEmoji,
   getResultTitle,
 } from '../logic/shareResult';
+
 import Header from '../components/Header';
 import {NewGameModal, GameConfig} from '../components/NewGameModal';
 import {palette} from '../theme/colors';
 import {getTileColors} from '../theme/getColors';
 import LinearGradient from 'react-native-linear-gradient';
+
+const GAME_STATE_BASE_KEY = 'game.state';
+
+// Get the scoped game state key for the current user
+function getGameStateKey(): string {
+  const scopedKey = getScopedKey(GAME_STATE_BASE_KEY);
+  // Fall back to base key if no user is set (for backwards compatibility during development)
+  return scopedKey ?? GAME_STATE_BASE_KEY;
+}
 
 type Mode = 'daily' | 'free';
 type GameStatus = 'playing' | 'won' | 'lost';
@@ -143,7 +155,7 @@ export default function GameScreen({onNavigateToStats}: Props) {
       current,
       status,
     };
-    setJSON('game.state', state);
+    setJSON(getGameStateKey(), state);
   }, [length, maxRows, mode, dateISO, answer, rows, feedback, current, status]);
 
   // One-time initialization: on first launch, enforce 5×6 defaults and do not
@@ -160,7 +172,7 @@ export default function GameScreen({onNavigateToStats}: Props) {
         // Do not restore saved progress or auto-start; user will press Start Game
         return;
       }
-      const saved: any = getJSON('game.state', null as any);
+      const saved: any = getJSON(getGameStateKey(), null as any);
       const today = new Date().toISOString().slice(0, 10);
       if (saved && typeof saved === 'object') {
         // If daily and date changed, roll to today's word
@@ -338,7 +350,7 @@ export default function GameScreen({onNavigateToStats}: Props) {
       const key = `daily.5x6.${today}.completed`;
       let alreadyPlayedDailyToday = getJSON<boolean>(key, false);
       if (!alreadyPlayedDailyToday) {
-        const saved: any = getJSON('game.state', null as any);
+        const saved: any = getJSON(getGameStateKey(), null as any);
         if (
           saved &&
           saved.mode === 'daily' &&

@@ -14,6 +14,10 @@ import React, {
 } from 'react';
 import {authService, AuthSession, AuthUser} from '../services/auth';
 import {isDevelopment} from '../config/environment';
+import {setCurrentUserId} from '../storage/userScope';
+
+// Stable user ID for development mode
+const DEV_MODE_USER_ID = 'dev-user';
 
 interface AuthContextValue {
   session: AuthSession | null;
@@ -41,6 +45,20 @@ interface AuthProviderProps {
 export function AuthProvider({children}: AuthProviderProps) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Update user-scoped storage when session changes
+  useEffect(() => {
+    if (isDevelopment) {
+      // In dev mode, always use a stable user ID
+      setCurrentUserId(DEV_MODE_USER_ID);
+    } else if (session?.user?.id) {
+      // In prod mode, use the authenticated user's ID
+      setCurrentUserId(session.user.id);
+    } else {
+      // No user signed in - clear user ID
+      setCurrentUserId(null);
+    }
+  }, [session]);
 
   useEffect(() => {
     let isMounted = true;
@@ -103,6 +121,8 @@ export function AuthProvider({children}: AuthProviderProps) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
+
+
 
 
 
