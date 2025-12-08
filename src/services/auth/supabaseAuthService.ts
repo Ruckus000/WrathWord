@@ -262,25 +262,39 @@ class SupabaseAuthService implements IAuthService {
         return;
       }
 
-      // Get user profile (supabase is guaranteed non-null here since we checked above)
-      const {data: profile} = await supabase
-        .from('profiles')
-        .select('username, display_name, friend_code')
-        .eq('user_id', session.user.id)
-        .single();
+      // Wrap in try-catch to ensure callback is always called
+      try {
+        const {data: profile} = await supabase
+          .from('profiles')
+          .select('username, display_name, friend_code')
+          .eq('user_id', session.user.id)
+          .single();
 
-      callback({
-        user: {
-          id: session.user.id,
-          email: session.user.email,
-          username: profile?.username,
-          displayName: profile?.display_name,
-          friendCode: profile?.friend_code,
-          createdAt: session.user.created_at,
-        },
-        accessToken: session.access_token,
-        refreshToken: session.refresh_token,
-      });
+        callback({
+          user: {
+            id: session.user.id,
+            email: session.user.email,
+            username: profile?.username,
+            displayName: profile?.display_name,
+            friendCode: profile?.friend_code,
+            createdAt: session.user.created_at,
+          },
+          accessToken: session.access_token,
+          refreshToken: session.refresh_token,
+        });
+      } catch (error) {
+        // Still call back with basic user info if profile fetch fails
+        console.error('[Auth] Profile fetch failed in onAuthStateChange:', error);
+        callback({
+          user: {
+            id: session.user.id,
+            email: session.user.email,
+            createdAt: session.user.created_at,
+          },
+          accessToken: session.access_token,
+          refreshToken: session.refresh_token,
+        });
+      }
     });
 
     return () => {
@@ -318,6 +332,7 @@ class SupabaseAuthService implements IAuthService {
 }
 
 export const supabaseAuthService = new SupabaseAuthService();
+
 
 
 

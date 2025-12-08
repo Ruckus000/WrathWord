@@ -94,9 +94,9 @@ export default function SignInScreen({
         return;
       }
 
-      // Success - navigate to game
+      // Success - auth state change will update isAuthenticated
+      // via AuthContext, which triggers navigation automatically
       setLoading(false);
-      onSignInSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign in');
       setLoading(false);
@@ -425,3 +425,4 @@ const styles = StyleSheet.create({
     color: palette.accentTeal,
   },
 });
+

@@ -121,8 +121,8 @@ export default function SignUpScreen({
       }
 
       // Immediate success (no email confirmation required)
+      // Auth state change will update isAuthenticated via AuthContext
       setLoading(false);
-      onSignUpSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create account');
       setLoading(false);
@@ -448,3 +448,4 @@ const confirmStyles = StyleSheet.create({
     marginTop: 24,
   },
 });
+
