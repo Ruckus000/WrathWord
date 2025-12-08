@@ -15,6 +15,8 @@ import {
 import {getFriendCode} from '../../storage/friendCode';
 
 class SupabaseAuthService implements IAuthService {
+  private authStateCallbacks: Array<(session: AuthSession | null) => void> = [];
+
   async signUp(
     email: string,
     password: string,
@@ -76,6 +78,9 @@ class SupabaseAuthService implements IAuthService {
         refreshToken: authData.session.refresh_token,
       };
 
+      // Notify all registered listeners (like mockAuthService does)
+      this.authStateCallbacks.forEach(cb => cb(session));
+
       return {data: session, error: null};
     } catch (err) {
       return {
@@ -135,6 +140,9 @@ class SupabaseAuthService implements IAuthService {
         refreshToken: authData.session?.refresh_token,
       };
 
+      // Notify all registered listeners (like mockAuthService does)
+      this.authStateCallbacks.forEach(cb => cb(session));
+
       return {data: session, error: null};
     } catch (err) {
       return {
@@ -158,6 +166,10 @@ class SupabaseAuthService implements IAuthService {
       if (error) {
         return {data: null, error: {message: error.message}};
       }
+
+      // Notify all registered listeners (like mockAuthService does)
+      this.authStateCallbacks.forEach(cb => cb(null));
+
       return {data: undefined, error: null};
     } catch (err) {
       return {
@@ -254,6 +266,15 @@ class SupabaseAuthService implements IAuthService {
       return () => {};
     }
 
+    // Store callback locally (like mockAuthService does)
+    this.authStateCallbacks.push(callback);
+
+    // Immediately call with current session (like mockAuthService does)
+    this.getSession().then(session => {
+      callback(session);
+    });
+
+    // Keep Supabase listener for external changes (token refresh, logout from other device, etc.)
     const {
       data: {subscription},
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -297,7 +318,12 @@ class SupabaseAuthService implements IAuthService {
       }
     });
 
+    // Return unsubscribe function
     return () => {
+      const index = this.authStateCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.authStateCallbacks.splice(index, 1);
+      }
       subscription.unsubscribe();
     };
   }
@@ -332,6 +358,7 @@ class SupabaseAuthService implements IAuthService {
 }
 
 export const supabaseAuthService = new SupabaseAuthService();
+
 
 
 
