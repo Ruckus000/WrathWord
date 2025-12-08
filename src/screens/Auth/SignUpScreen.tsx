@@ -121,6 +121,7 @@ export default function SignUpScreen({
       }
 
       // Immediate success (no email confirmation required)
+      setLoading(false);
       onSignUpSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create account');

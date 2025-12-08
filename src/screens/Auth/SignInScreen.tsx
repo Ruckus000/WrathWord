@@ -94,9 +94,9 @@ export default function SignInScreen({
         return;
       }
 
-      // Success - auth state change will update isAuthenticated
-      // which triggers navigation automatically via AuthContext
+      // Success - navigate to game
       setLoading(false);
+      onSignInSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign in');
       setLoading(false);
