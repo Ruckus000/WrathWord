@@ -84,10 +84,12 @@ class SupabaseProfileService implements IProfileService {
     }
 
     try {
-      const {data: {user}} = await supabase.auth.getUser();
-      if (!user) {
+      // Use getSession() - cached locally, no network call
+      const {data: {session}} = await supabase.auth.getSession();
+      if (!session?.user) {
         return getLocalProfile();
       }
+      const user = session.user;
 
       // Try to fetch from Supabase
       const {data: profile, error} = await supabase
@@ -121,10 +123,12 @@ class SupabaseProfileService implements IProfileService {
     }
 
     try {
-      const {data: {user}} = await supabase.auth.getUser();
-      if (!user) {
+      // Use getSession() - cached locally, no network call
+      const {data: {session}} = await supabase.auth.getSession();
+      if (!session?.user) {
         return;
       }
+      const user = session.user;
 
       // Update in Supabase
       await supabase
@@ -152,12 +156,12 @@ class SupabaseProfileService implements IProfileService {
     }
 
     try {
-      const {
-        data: {user},
-      } = await supabase.auth.getUser();
-      if (!user) {
+      // Use getSession() - cached locally, no network call
+      const {data: {session}} = await supabase.auth.getSession();
+      if (!session?.user) {
         throw new Error('Not authenticated');
       }
+      const user = session.user;
 
       // Update in Supabase
       const {error} = await supabase
@@ -184,10 +188,12 @@ class SupabaseProfileService implements IProfileService {
     }
 
     try {
-      const {data: {user}} = await supabase.auth.getUser();
-      if (!user) {
+      // Use getSession() - cached locally, no network call
+      const {data: {session}} = await supabase.auth.getSession();
+      if (!session?.user) {
         return;
       }
+      const user = session.user;
 
       const localProfile = getLocalProfile();
 
@@ -237,6 +243,8 @@ export function getProfileService(): IProfileService {
 }
 
 export const profileService = getProfileService();
+
+
 
 
 

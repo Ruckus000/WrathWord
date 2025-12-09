@@ -15,6 +15,7 @@ import React, {
 import {authService, AuthSession, AuthUser} from '../services/auth';
 import {isDevelopment} from '../config/environment';
 import {setCurrentUserId} from '../storage/userScope';
+import {friendsService} from '../services/data';
 
 // Stable user ID for development mode
 const DEV_MODE_USER_ID = 'dev-user';
@@ -54,6 +55,12 @@ export function AuthProvider({children}: AuthProviderProps) {
     } else if (session?.user?.id) {
       // In prod mode, use the authenticated user's ID
       setCurrentUserId(session.user.id);
+
+      // Pre-fetch friends data in background (fire-and-forget)
+      // This populates the cache so FriendsScreen loads instantly
+      friendsService.getFriends().catch(err => {
+        console.log('Background friends pre-fetch failed:', err);
+      });
     } else {
       // No user signed in - clear user ID
       setCurrentUserId(null);

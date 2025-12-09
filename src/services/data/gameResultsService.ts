@@ -9,6 +9,7 @@ import {isDevelopment} from '../../config/environment';
 import {getSupabase} from '../supabase/client';
 import {TileState} from '../../logic/evaluateGuess';
 import {recordGameResult as recordLocal} from '../../storage/profile';
+import {getProfileService} from './profileService';
 
 export interface GameResult {
   id?: string;
@@ -81,10 +82,12 @@ class SupabaseGameResultsService implements IGameResultsService {
     }
 
     try {
-      const {data: {user}} = await supabase.auth.getUser();
-      if (!user) {
+      // Use getSession() - cached locally, no network call
+      const {data: {session}} = await supabase.auth.getSession();
+      if (!session?.user) {
         return;
       }
+      const user = session.user;
 
       // Save to Supabase
       await supabase.from('game_results').insert({
@@ -96,6 +99,10 @@ class SupabaseGameResultsService implements IGameResultsService {
         date: result.date,
         feedback: result.feedback,
       });
+
+      // Sync aggregated stats to game_stats table
+      // This ensures leaderboards have fresh data
+      await getProfileService().syncStats();
     } catch (err) {
       console.error('Failed to save game result to Supabase:', err);
       // Fail silently - local save is already done
@@ -109,10 +116,12 @@ class SupabaseGameResultsService implements IGameResultsService {
     }
 
     try {
-      const {data: {user}} = await supabase.auth.getUser();
-      if (!user) {
+      // Use getSession() - cached locally, no network call
+      const {data: {session}} = await supabase.auth.getSession();
+      if (!session?.user) {
         return [];
       }
+      const user = session.user;
 
       const {data: results, error} = await supabase
         .from('game_results')
@@ -148,10 +157,12 @@ class SupabaseGameResultsService implements IGameResultsService {
     }
 
     try {
-      const {data: {user}} = await supabase.auth.getUser();
-      if (!user) {
+      // Use getSession() - cached locally, no network call
+      const {data: {session}} = await supabase.auth.getSession();
+      if (!session?.user) {
         return [];
       }
+      const user = session.user;
 
       const {data: results, error} = await supabase
         .from('game_results')
@@ -190,6 +201,8 @@ export function getGameResultsService(): IGameResultsService {
 }
 
 export const gameResultsService = getGameResultsService();
+
+
 
 
 

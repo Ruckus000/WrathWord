@@ -62,8 +62,8 @@ export function useUserTodayResult(): UserTodayResult | null {
 
     checkResult();
 
-    // Re-check periodically in case the game state changes
-    const interval = setInterval(checkResult, 1000);
+    // Re-check periodically in case the game state changes (30 seconds to reduce battery drain)
+    const interval = setInterval(checkResult, 30000);
 
     return () => clearInterval(interval);
   }, []);

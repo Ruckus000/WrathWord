@@ -20,8 +20,12 @@ export function useUserStats(): UserStats {
   const [stats, setStats] = useState<UserStats>(() => {
     const totalStats = getTotalStats();
     return {
-      ...totalStats,
-      avgGuesses: calculateAvgGuesses(totalStats),
+      played: totalStats.played,
+      won: totalStats.won,
+      winRate: totalStats.winRate,
+      currentStreak: totalStats.currentStreak,
+      maxStreak: totalStats.maxStreak,
+      avgGuesses: calculateAvgGuesses(totalStats.guessDistribution, totalStats.won),
     };
   });
 
@@ -29,13 +33,17 @@ export function useUserStats(): UserStats {
     const refreshStats = () => {
       const totalStats = getTotalStats();
       setStats({
-        ...totalStats,
-        avgGuesses: calculateAvgGuesses(totalStats),
+        played: totalStats.played,
+        won: totalStats.won,
+        winRate: totalStats.winRate,
+        currentStreak: totalStats.currentStreak,
+        maxStreak: totalStats.maxStreak,
+        avgGuesses: calculateAvgGuesses(totalStats.guessDistribution, totalStats.won),
       });
     };
 
-    // Refresh periodically to catch updates
-    const interval = setInterval(refreshStats, 1000);
+    // Refresh periodically to catch updates (30 seconds to reduce battery drain)
+    const interval = setInterval(refreshStats, 30000);
 
     return () => clearInterval(interval);
   }, []);
@@ -44,19 +52,25 @@ export function useUserStats(): UserStats {
 }
 
 /**
- * Calculate average guesses from total stats.
- * This is a rough estimate based on win rate.
+ * Calculate average guesses from the actual guess distribution data.
+ * This gives the real average number of guesses per winning game.
  */
-function calculateAvgGuesses(stats: {played: number; won: number}): number {
-  if (stats.won === 0) {
+function calculateAvgGuesses(
+  guessDistribution: {[guesses: number]: number},
+  gamesWon: number,
+): number {
+  if (gamesWon === 0) {
     return 0;
   }
-  // This is a placeholder - for accurate avgGuesses we'd need
-  // to track total guesses across all games
-  // For now, estimate based on win rate (higher win rate = fewer guesses)
-  const winRate = stats.played > 0 ? stats.won / stats.played : 0;
-  // Rough estimate: 3.5 average for good players, up to 5 for lower win rates
-  return Math.round((5 - winRate * 1.5) * 10) / 10;
+
+  // Sum up (guesses * count) for each entry in distribution
+  const totalGuesses = Object.entries(guessDistribution).reduce(
+    (sum, [guesses, count]) => sum + parseInt(guesses, 10) * count,
+    0,
+  );
+
+  // Return average rounded to 1 decimal place
+  return Math.round((totalGuesses / gamesWon) * 10) / 10;
 }
 
 /**
@@ -65,7 +79,11 @@ function calculateAvgGuesses(stats: {played: number; won: number}): number {
 export function getUserStats(): UserStats {
   const totalStats = getTotalStats();
   return {
-    ...totalStats,
-    avgGuesses: calculateAvgGuesses(totalStats),
+    played: totalStats.played,
+    won: totalStats.won,
+    winRate: totalStats.winRate,
+    currentStreak: totalStats.currentStreak,
+    maxStreak: totalStats.maxStreak,
+    avgGuesses: calculateAvgGuesses(totalStats.guessDistribution, totalStats.won),
   };
 }

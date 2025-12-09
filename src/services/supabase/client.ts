@@ -43,7 +43,10 @@ let _initialized = false;
  * Only creates a real client if Supabase is configured
  */
 function initializeSupabase(): SupabaseClient | null {
-  console.log('[Supabase] Initializing, shouldUseSupabase:', shouldUseSupabase());
+  console.log('[Supabase] Initializing...');
+  console.log('[Supabase] URL:', supabaseConfig.url || '(empty)');
+  console.log('[Supabase] Key present:', !!supabaseConfig.anonKey);
+  console.log('[Supabase] shouldUseSupabase:', shouldUseSupabase());
 
   if (!shouldUseSupabase()) {
     console.log('[Supabase] Skipping - dev mode or not configured');
@@ -61,6 +64,15 @@ function initializeSupabase(): SupabaseClient | null {
       },
     });
     console.log('[Supabase] Client created successfully');
+
+    // DIAGNOSTIC: Test if raw fetch works
+    console.log('[Supabase] Testing raw fetch...');
+    fetch(`${supabaseConfig.url}/rest/v1/`, {
+      headers: {apikey: supabaseConfig.anonKey},
+    })
+      .then(res => console.log('[Supabase] RAW FETCH SUCCESS:', res.status))
+      .catch(err => console.log('[Supabase] RAW FETCH ERROR:', err.message));
+
     return client;
   } catch (error) {
     console.error('[Supabase] Failed to create client:', error);
@@ -239,6 +251,8 @@ export type Database = {
     };
   };
 };
+
+
 
 
 

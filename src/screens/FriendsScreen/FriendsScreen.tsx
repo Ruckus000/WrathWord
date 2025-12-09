@@ -1,11 +1,12 @@
 import React, {useState, useCallback, useEffect} from 'react';
-import {View, Text, StyleSheet, Pressable, ActivityIndicator} from 'react-native';
+import {View, Text, StyleSheet, Pressable} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {palette} from '../../theme/colors';
 import {ChevronLeft, PlusIcon} from '../../components/icons/SettingsIcons';
 import {Friend} from '../../data/mockFriends';
 import {friendsService} from '../../services/data';
 import {useUserTodayResult, useUserStats} from '../../hooks';
+import {withTimeout, DEFAULT_TIMEOUT} from '../../services/utils/timeout';
 
 import SegmentControl, {Period} from './SegmentControl';
 import {Scope} from './ScopeToggle';
@@ -30,12 +31,13 @@ export default function FriendsScreen({
 }: Props) {
   const insets = useSafeAreaInsets();
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('today');
-  const [selectedScope, setSelectedScope] = useState<Scope>('global');
+  const [selectedScope, setSelectedScope] = useState<Scope>('friends');
   const [showH2H, setShowH2H] = useState(false);
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
   const [showAddFriends, setShowAddFriends] = useState(false);
   const [friends, setFriends] = useState<Friend[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start false - show UI immediately
+  const [error, setError] = useState<string | null>(null);
 
   // Get actual user data from hooks
   const userTodayResult = useUserTodayResult();
@@ -46,17 +48,31 @@ export default function FriendsScreen({
     loadFriends();
   }, []);
 
-  const loadFriends = async () => {
+  const loadFriends = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const friendsData = await friendsService.getFriends();
+      // Use stale-while-revalidate pattern
+      // If cached data exists, it returns immediately
+      // Fresh data callback updates state when API responds
+      const friendsData = await withTimeout(
+        friendsService.getFriends(freshData => {
+          // Called when fresh data arrives (background refresh)
+          setFriends(freshData);
+        }),
+        DEFAULT_TIMEOUT,
+        'Loading friends timed out',
+      );
       setFriends(friendsData);
     } catch (err) {
       console.error('Failed to load friends:', err);
+      setError(
+        err instanceof Error ? err.message : 'Failed to load friends',
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const handleFriendPress = useCallback((friend: Friend) => {
     setSelectedFriend(friend);
@@ -72,7 +88,7 @@ export default function FriendsScreen({
   const friendsPlayedToday = friends.filter(f => f.lastPlayed === 'today');
   const friendsWaiting = friends.filter(f => f.lastPlayed !== 'today');
 
-  // Calculate user rank (based on guesses - lower is better)
+  // Calculate user rank for today (based on guesses - lower is better)
   const userRank =
     userPlayedToday && userTodayResult
       ? friendsPlayedToday.filter(
@@ -82,27 +98,11 @@ export default function FriendsScreen({
         ).length + 1
       : 0;
 
-  if (loading) {
-    return (
-      <View
-        style={[
-          styles.container,
-          {paddingTop: insets.top, paddingBottom: insets.bottom},
-        ]}>
-        <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={onBack}>
-            <ChevronLeft size={22} color={palette.primary} />
-          </Pressable>
-          <Text style={styles.headerTitle}>Compete</Text>
-          <View style={styles.addBtn} />
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={palette.primary} />
-        </View>
-      </View>
-    );
-  }
+  // Calculate user rank for all-time (based on win rate - higher is better)
+  const allTimeRank =
+    friends.filter(f => f.stats.winRate > userStats.winRate).length + 1;
 
+  // Always show the UI - loading/error handled inline by child components
   return (
     <View
       style={[
@@ -144,7 +144,7 @@ export default function FriendsScreen({
 
         {selectedPeriod === 'alltime' && (
           <AllTimeCard
-            userRank={3}
+            userRank={allTimeRank}
             totalFriends={friends.length}
             winRate={userStats.winRate}
             avgGuesses={userStats.avgGuesses}
@@ -170,6 +170,9 @@ export default function FriendsScreen({
           friends={friends}
           userRank={userRank}
           onFriendPress={handleFriendPress}
+          friendsLoading={loading}
+          friendsError={error}
+          onRetryFriends={loadFriends}
         />
       </View>
 
@@ -228,5 +231,26 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  errorContainer: {
+    alignItems: 'center',
+    gap: 16,
+    paddingHorizontal: 32,
+  },
+  errorText: {
+    fontSize: 15,
+    color: palette.textMuted,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: palette.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  retryButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: palette.textPrimary,
   },
 });

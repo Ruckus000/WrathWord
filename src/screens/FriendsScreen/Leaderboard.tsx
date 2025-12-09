@@ -1,10 +1,11 @@
-import React, {useEffect, useState} from 'react';
-import {View, Text, StyleSheet, ScrollView, ActivityIndicator} from 'react-native';
+import React, {useEffect, useState, useCallback} from 'react';
+import {View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable} from 'react-native';
 import {palette} from '../../theme/colors';
 import {Friend} from '../../data/mockFriends';
 import {friendsService} from '../../services/data';
 import {useUserTodayResult, useUserStats} from '../../hooks';
 import {useAuth} from '../../contexts/AuthContext';
+import {withTimeout, DEFAULT_TIMEOUT} from '../../services/utils/timeout';
 import {Period} from './SegmentControl';
 import ScopeToggle, {Scope} from './ScopeToggle';
 import LeaderboardRow from './LeaderboardRow';
@@ -17,6 +18,9 @@ type Props = {
   friends: Friend[];
   userRank: number;
   onFriendPress: (friend: Friend) => void;
+  friendsLoading?: boolean;
+  friendsError?: string | null;
+  onRetryFriends?: () => void;
 };
 
 export default function Leaderboard({
@@ -27,33 +31,53 @@ export default function Leaderboard({
   friends,
   userRank,
   onFriendPress,
+  friendsLoading = false,
+  friendsError = null,
+  onRetryFriends,
 }: Props) {
   const [globalUsers, setGlobalUsers] = useState<Friend[]>([]);
   const [loadingGlobal, setLoadingGlobal] = useState(false);
+  const [globalError, setGlobalError] = useState<string | null>(null);
+  const [globalLoaded, setGlobalLoaded] = useState(false);
 
   // Get real user data
   const {user} = useAuth();
   const userTodayResult = useUserTodayResult();
   const userStats = useUserStats();
 
-  // Load global leaderboard when scope changes to global
-  useEffect(() => {
-    if (scope === 'global' && globalUsers.length === 0) {
-      loadGlobalLeaderboard();
-    }
-  }, [scope]);
-
-  const loadGlobalLeaderboard = async () => {
+  const loadGlobalLeaderboard = useCallback(async () => {
     setLoadingGlobal(true);
+    setGlobalError(null);
     try {
-      const data = await friendsService.getGlobalLeaderboard(50);
+      // Use stale-while-revalidate pattern
+      // If cached data exists, it returns immediately
+      // Fresh data callback updates state when API responds
+      const data = await withTimeout(
+        friendsService.getGlobalLeaderboard(50, freshData => {
+          // Called when fresh data arrives (background refresh)
+          setGlobalUsers(freshData);
+        }),
+        DEFAULT_TIMEOUT,
+        'Loading leaderboard timed out',
+      );
       setGlobalUsers(data);
+      setGlobalLoaded(true);
     } catch (err) {
       console.error('Failed to load global leaderboard:', err);
+      setGlobalError(
+        err instanceof Error ? err.message : 'Failed to load leaderboard',
+      );
     } finally {
       setLoadingGlobal(false);
     }
-  };
+  }, []);
+
+  // Load global leaderboard when scope changes to global
+  useEffect(() => {
+    if (scope === 'global' && !globalLoaded && !loadingGlobal) {
+      loadGlobalLeaderboard();
+    }
+  }, [scope, globalLoaded, loadingGlobal, loadGlobalLeaderboard]);
 
   // Determine data source and user rank based on scope
   const users = scope === 'friends' ? friends : globalUsers;
@@ -165,9 +189,35 @@ export default function Leaderboard({
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}>
-        {loadingGlobal && scope === 'global' ? (
+        {/* Loading state */}
+        {((scope === 'global' && loadingGlobal) || (scope === 'friends' && friendsLoading)) ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="small" color={palette.primary} />
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
+        ) : /* Error state */ ((scope === 'global' && globalError) || (scope === 'friends' && friendsError)) ? (
+          <View style={styles.loadingContainer}>
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>
+                {scope === 'global' ? globalError : friendsError}
+              </Text>
+              <Pressable
+                style={styles.retryButton}
+                onPress={scope === 'global' ? loadGlobalLeaderboard : onRetryFriends}>
+                <Text style={styles.retryText}>Retry</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : /* Empty state */ leaderboard.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyTitle}>
+              {scope === 'friends' ? 'No Friends Yet' : 'No Players Found'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {scope === 'friends'
+                ? 'Add friends to compete with them!'
+                : 'Be the first to play today!'}
+            </Text>
           </View>
         ) : (
         <View style={styles.list}>
@@ -250,5 +300,49 @@ const styles = StyleSheet.create({
     padding: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: palette.textMuted,
+    marginTop: 8,
+  },
+  emptyContainer: {
+    backgroundColor: palette.card,
+    borderRadius: 16,
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: palette.textPrimary,
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: palette.textMuted,
+    textAlign: 'center',
+  },
+  errorContainer: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  errorText: {
+    fontSize: 14,
+    color: palette.textMuted,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: palette.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: palette.textPrimary,
   },
 });

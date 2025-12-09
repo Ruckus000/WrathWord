@@ -94,8 +94,11 @@ class SupabaseAuthService implements IAuthService {
     email: string,
     password: string,
   ): Promise<AuthResult<AuthSession>> {
+    console.log('[Auth] signIn() called');
     const supabase = getSupabase();
+
     if (!supabase) {
+      console.log('[Auth] No Supabase client - returning error');
       return {
         data: null,
         error: {message: 'Supabase not configured', code: 'NO_SUPABASE'},
@@ -103,11 +106,16 @@ class SupabaseAuthService implements IAuthService {
     }
 
     try {
+      console.log('[Auth] Calling signInWithPassword...');
       const {data: authData, error: authError} =
         await supabase.auth.signInWithPassword({
           email,
           password,
         });
+      console.log(
+        '[Auth] signInWithPassword returned',
+        authError ? 'error: ' + authError.message : 'success',
+      );
 
       if (authError) {
         return {data: null, error: {message: authError.message}};
@@ -121,11 +129,13 @@ class SupabaseAuthService implements IAuthService {
       }
 
       // Get user profile
+      console.log('[Auth] Fetching user profile...');
       const {data: profile} = await supabase
         .from('profiles')
         .select('username, display_name, friend_code')
         .eq('user_id', authData.user.id)
         .single();
+      console.log('[Auth] Profile fetched:', profile?.username);
 
       const session: AuthSession = {
         user: {
@@ -141,10 +151,16 @@ class SupabaseAuthService implements IAuthService {
       };
 
       // Notify all registered listeners (like mockAuthService does)
+      console.log(
+        '[Auth] signIn success, notifying',
+        this.authStateCallbacks.length,
+        'callbacks',
+      );
       this.authStateCallbacks.forEach(cb => cb(session));
 
       return {data: session, error: null};
     } catch (err) {
+      console.log('[Auth] signIn caught error:', err);
       return {
         data: null,
         error: {message: err instanceof Error ? err.message : 'Unknown error'},
@@ -261,13 +277,20 @@ class SupabaseAuthService implements IAuthService {
   onAuthStateChange(
     callback: (session: AuthSession | null) => void,
   ): () => void {
+    console.log('[Auth] onAuthStateChange() called');
     const supabase = getSupabase();
+
     if (!supabase) {
+      console.log('[Auth] WARNING: Not registering callback - Supabase is null');
       return () => {};
     }
 
     // Store callback locally (like mockAuthService does)
     this.authStateCallbacks.push(callback);
+    console.log(
+      '[Auth] Callback registered, total:',
+      this.authStateCallbacks.length,
+    );
 
     // Immediately call with current session (like mockAuthService does)
     this.getSession().then(session => {
@@ -277,13 +300,27 @@ class SupabaseAuthService implements IAuthService {
     // Keep Supabase listener for external changes (token refresh, logout from other device, etc.)
     const {
       data: {subscription},
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Auth] NATIVE onAuthStateChange fired:', event, !!session);
       if (!session) {
         callback(null);
         return;
       }
 
-      // Wrap in try-catch to ensure callback is always called
+      // IMPORTANT: Call callback IMMEDIATELY with basic session info
+      // Don't wait for profile fetch - it might hang and block navigation
+      console.log('[Auth] Calling callback immediately with basic session');
+      callback({
+        user: {
+          id: session.user.id,
+          email: session.user.email,
+          createdAt: session.user.created_at,
+        },
+        accessToken: session.access_token,
+        refreshToken: session.refresh_token,
+      });
+
+      // Then try to fetch profile and update with full info (non-blocking)
       try {
         const {data: profile} = await supabase
           .from('profiles')
@@ -291,30 +328,23 @@ class SupabaseAuthService implements IAuthService {
           .eq('user_id', session.user.id)
           .single();
 
-        callback({
-          user: {
-            id: session.user.id,
-            email: session.user.email,
-            username: profile?.username,
-            displayName: profile?.display_name,
-            friendCode: profile?.friend_code,
-            createdAt: session.user.created_at,
-          },
-          accessToken: session.access_token,
-          refreshToken: session.refresh_token,
-        });
+        if (profile) {
+          console.log('[Auth] Profile fetched, updating session');
+          callback({
+            user: {
+              id: session.user.id,
+              email: session.user.email,
+              username: profile.username,
+              displayName: profile.display_name,
+              friendCode: profile.friend_code,
+              createdAt: session.user.created_at,
+            },
+            accessToken: session.access_token,
+            refreshToken: session.refresh_token,
+          });
+        }
       } catch (error) {
-        // Still call back with basic user info if profile fetch fails
-        console.error('[Auth] Profile fetch failed in onAuthStateChange:', error);
-        callback({
-          user: {
-            id: session.user.id,
-            email: session.user.email,
-            createdAt: session.user.created_at,
-          },
-          accessToken: session.access_token,
-          refreshToken: session.refresh_token,
-        });
+        console.error('[Auth] Profile fetch failed (non-blocking):', error);
       }
     });
 

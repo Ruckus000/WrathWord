@@ -1,8 +1,13 @@
 /**
  * Friends Service
- * 
+ *
  * Handles friend relationships, requests, and leaderboards.
  * Routes to appropriate implementation based on environment mode.
+ *
+ * PERFORMANCE: Uses stale-while-revalidate caching pattern:
+ * - Returns cached data immediately for instant UI
+ * - Fetches fresh data in background
+ * - Updates cache when fresh data arrives
  */
 
 import {isDevelopment} from '../../config/environment';
@@ -16,17 +21,53 @@ import {
   FriendRequest,
 } from '../../data/mockFriendRequests';
 import {MOCK_GLOBAL_USERS} from '../../data/mockGlobalUsers';
+import {
+  getCache,
+  setCache,
+  isCacheStale,
+  CACHE_KEYS,
+} from '../utils/cache';
+
+/**
+ * Safely convert a value to a number, returning fallback for NaN/null/undefined
+ */
+function safeNumber(val: any, fallback = 0): number {
+  const num = Number(val);
+  return isNaN(num) ? fallback : num;
+}
+
+/**
+ * Callback for stale-while-revalidate pattern
+ * Called when fresh data arrives after returning cached data
+ */
+export type OnFreshData<T> = (data: T) => void;
 
 export interface IFriendsService {
-  getFriends(): Promise<Friend[]>;
+  /**
+   * Get friends list with optional cache callback
+   * @param onFreshData - Called when fresh data arrives (for stale-while-revalidate)
+   */
+  getFriends(onFreshData?: OnFreshData<Friend[]>): Promise<Friend[]>;
   searchUserByFriendCode(friendCode: string): Promise<Friend | null>;
   sendFriendRequest(toUserId: string): Promise<void>;
   acceptFriendRequest(requestId: string): Promise<void>;
   declineFriendRequest(requestId: string): Promise<void>;
   getIncomingRequests(): Promise<FriendRequest[]>;
   getOutgoingRequests(): Promise<FriendRequest[]>;
-  getGlobalLeaderboard(limit?: number): Promise<Friend[]>;
+  /**
+   * Get global leaderboard with optional cache callback
+   * @param limit - Max number of users to return
+   * @param onFreshData - Called when fresh data arrives (for stale-while-revalidate)
+   */
+  getGlobalLeaderboard(
+    limit?: number,
+    onFreshData?: OnFreshData<Friend[]>,
+  ): Promise<Friend[]>;
   getFriendsLeaderboard(): Promise<Friend[]>;
+  /**
+   * Invalidate all caches (call after adding friend, etc.)
+   */
+  invalidateCache(): void;
 }
 
 /**
@@ -34,10 +75,14 @@ export interface IFriendsService {
  * Returns hardcoded mock data
  */
 class MockFriendsService implements IFriendsService {
-  async getFriends(): Promise<Friend[]> {
+  async getFriends(_onFreshData?: OnFreshData<Friend[]>): Promise<Friend[]> {
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 300));
     return MOCK_FRIENDS;
+  }
+
+  invalidateCache(): void {
+    // No-op for mock service
   }
 
   async searchUserByFriendCode(friendCode: string): Promise<Friend | null> {
@@ -93,7 +138,10 @@ class MockFriendsService implements IFriendsService {
     return MOCK_OUTGOING_REQUESTS;
   }
 
-  async getGlobalLeaderboard(limit = 20): Promise<Friend[]> {
+  async getGlobalLeaderboard(
+    limit = 20,
+    _onFreshData?: OnFreshData<Friend[]>,
+  ): Promise<Friend[]> {
     await new Promise(resolve => setTimeout(resolve, 300));
     return MOCK_GLOBAL_USERS.slice(0, limit);
   }
@@ -108,9 +156,19 @@ class MockFriendsService implements IFriendsService {
 
 /**
  * Supabase Friends Service (Prod Mode)
- * Fetches from Supabase backend
+ * Fetches from Supabase backend with caching
  */
 class SupabaseFriendsService implements IFriendsService {
+  /**
+   * Invalidate all cached data
+   * Call this after adding/removing friends
+   */
+  invalidateCache(): void {
+    setCache(CACHE_KEYS.FRIENDS, null);
+    setCache(CACHE_KEYS.GLOBAL_LEADERBOARD, null);
+    setCache(CACHE_KEYS.FRIENDS_LEADERBOARD, null);
+  }
+
   /**
    * Fetch today's game results for a list of users
    */
@@ -188,62 +246,102 @@ class SupabaseFriendsService implements IFriendsService {
       return 'inactive';
     }
   }
-  async getFriends(): Promise<Friend[]> {
+  /**
+   * Internal method to fetch friends from API (no caching)
+   */
+  private async fetchFriendsFromApi(): Promise<Friend[]> {
     const supabase = getSupabase();
     if (!supabase) {
       return [];
     }
 
+    // Use getSession() instead of getUser() - getSession is cached locally,
+    // getUser makes a network call that can hang during token refresh
+    const {data: {session}} = await supabase.auth.getSession();
+    if (!session?.user) {
+      return [];
+    }
+    const user = session.user;
+
+    // Use the leaderboard function with friends_only to get all friend data
+    // This gives us both the friend list and their stats in one query
+    const {data, error} = await supabase.rpc('get_leaderboard', {
+      p_user_id: user.id,
+      p_friends_only: true,
+      p_period: 'alltime',
+      p_limit: 100, // Get all friends
+    });
+
+    if (error || !data) {
+      return [];
+    }
+
+    // Fetch today's results for these friends
+    const userIds = data.map((row: any) => row.user_id);
+    const todayResults = await this.getTodayResults(userIds);
+
+    // Transform to Friend type
+    return data.map((row: any) => {
+      const todayResult = todayResults.get(row.user_id);
+      return {
+        id: row.user_id,
+        name: row.display_name || row.username,
+        letter: (row.display_name || row.username).charAt(0).toUpperCase(),
+        friendCode: row.friend_code,
+        streak: row.current_streak || 0,
+        lastPlayed: todayResult ? 'today' : 'inactive',
+        todayResult: todayResult
+          ? {
+              won: todayResult.won,
+              guesses: todayResult.guesses,
+              feedback: todayResult.feedback,
+            }
+          : undefined,
+        stats: {
+          played: row.games_played || 0,
+          won: row.games_won || 0,
+          winRate: safeNumber(row.win_rate),
+          avgGuesses: safeNumber(row.avg_guesses),
+          maxStreak: row.max_streak || 0,
+        },
+        h2h: {yourWins: 0, theirWins: 0}, // Will be populated separately if needed
+      };
+    });
+  }
+
+  /**
+   * Get friends with stale-while-revalidate caching
+   *
+   * @param onFreshData - Optional callback for when fresh data arrives
+   * @returns Cached data immediately if available, otherwise fetches from API
+   */
+  async getFriends(onFreshData?: OnFreshData<Friend[]>): Promise<Friend[]> {
+    // Check cache first
+    const cached = getCache<Friend[]>(CACHE_KEYS.FRIENDS);
+    const isStale = isCacheStale(CACHE_KEYS.FRIENDS);
+
+    // If we have cached data
+    if (cached !== null) {
+      // If stale, trigger background refresh
+      if (isStale && onFreshData) {
+        this.fetchFriendsFromApi()
+          .then(freshData => {
+            setCache(CACHE_KEYS.FRIENDS, freshData);
+            onFreshData(freshData);
+          })
+          .catch(err => {
+            console.error('Background friends refresh failed:', err);
+          });
+      }
+      // Return cached data immediately
+      return cached;
+    }
+
+    // No cache - fetch from API
     try {
-      const {data: {user}} = await supabase.auth.getUser();
-      if (!user) {
-        return [];
-      }
-
-      // Use the leaderboard function with friends_only to get all friend data
-      // This gives us both the friend list and their stats in one query
-      const {data, error} = await supabase.rpc('get_leaderboard', {
-        p_user_id: user.id,
-        p_friends_only: true,
-        p_period: 'alltime',
-        p_limit: 100, // Get all friends
-      });
-
-      if (error || !data) {
-        return [];
-      }
-
-      // Fetch today's results for these friends
-      const userIds = data.map((row: any) => row.user_id);
-      const todayResults = await this.getTodayResults(userIds);
-
-      // Transform to Friend type
-      return data.map((row: any) => {
-        const todayResult = todayResults.get(row.user_id);
-        return {
-          id: row.user_id,
-          name: row.display_name || row.username,
-          letter: (row.display_name || row.username).charAt(0).toUpperCase(),
-          friendCode: row.friend_code,
-          streak: row.current_streak || 0,
-          lastPlayed: todayResult ? 'today' : 'inactive',
-          todayResult: todayResult
-            ? {
-                won: todayResult.won,
-                guesses: todayResult.guesses,
-                feedback: todayResult.feedback,
-              }
-            : undefined,
-          stats: {
-            played: row.games_played || 0,
-            won: row.games_won || 0,
-            winRate: parseFloat(row.win_rate) || 0,
-            avgGuesses: parseFloat(row.avg_guesses) || 0,
-            maxStreak: row.max_streak || 0,
-          },
-          h2h: {yourWins: 0, theirWins: 0}, // Will be populated separately if needed
-        };
-      });
+      const friends = await this.fetchFriendsFromApi();
+      setCache(CACHE_KEYS.FRIENDS, friends);
+      return friends;
     } catch (err) {
       console.error('Failed to fetch friends:', err);
       return [];
@@ -296,10 +394,12 @@ class SupabaseFriendsService implements IFriendsService {
     }
 
     try {
-      const {data: {user}} = await supabase.auth.getUser();
-      if (!user) {
+      // Use getSession() - cached locally, no network call
+      const {data: {session}} = await supabase.auth.getSession();
+      if (!session?.user) {
         return;
       }
+      const user = session.user;
 
       await supabase.from('friend_requests').insert({
         from_user_id: user.id,
@@ -348,10 +448,12 @@ class SupabaseFriendsService implements IFriendsService {
     }
 
     try {
-      const {data: {user}} = await supabase.auth.getUser();
-      if (!user) {
+      // Use getSession() - cached locally, no network call
+      const {data: {session}} = await supabase.auth.getSession();
+      if (!session?.user) {
         return [];
       }
+      const user = session.user;
 
       const {data: requests, error} = await supabase
         .from('friend_requests')
@@ -377,10 +479,12 @@ class SupabaseFriendsService implements IFriendsService {
     }
 
     try {
-      const {data: {user}} = await supabase.auth.getUser();
-      if (!user) {
+      // Use getSession() - cached locally, no network call
+      const {data: {session}} = await supabase.auth.getSession();
+      if (!session?.user) {
         return [];
       }
+      const user = session.user;
 
       const {data: requests, error} = await supabase
         .from('friend_requests')
@@ -399,61 +503,104 @@ class SupabaseFriendsService implements IFriendsService {
     }
   }
 
-  async getGlobalLeaderboard(limit = 20): Promise<Friend[]> {
+  /**
+   * Internal method to fetch global leaderboard from API (no caching)
+   */
+  private async fetchGlobalLeaderboardFromApi(limit: number): Promise<Friend[]> {
     const supabase = getSupabase();
     if (!supabase) {
       return [];
     }
 
+    // Use getSession() - cached locally, no network call
+    const {data: {session}} = await supabase.auth.getSession();
+    if (!session?.user) {
+      return [];
+    }
+    const user = session.user;
+
+    // Call the leaderboard function
+    const {data, error} = await supabase.rpc('get_leaderboard', {
+      p_user_id: user.id,
+      p_friends_only: false,
+      p_period: 'alltime',
+      p_limit: limit,
+    });
+
+    if (error || !data) {
+      return [];
+    }
+
+    // Fetch today's results for these users
+    const userIds = data.map((row: any) => row.user_id);
+    const todayResults = await this.getTodayResults(userIds);
+
+    // Transform to Friend type
+    return data.map((row: any) => {
+      const todayResult = todayResults.get(row.user_id);
+      return {
+        id: row.user_id,
+        name: row.display_name || row.username,
+        letter: (row.display_name || row.username).charAt(0).toUpperCase(),
+        friendCode: row.friend_code,
+        streak: row.current_streak || 0,
+        lastPlayed: todayResult ? 'today' : 'inactive',
+        todayResult: todayResult
+          ? {
+              won: todayResult.won,
+              guesses: todayResult.guesses,
+              feedback: todayResult.feedback,
+            }
+          : undefined,
+        stats: {
+          played: row.games_played || 0,
+          won: row.games_won || 0,
+          winRate: safeNumber(row.win_rate),
+          avgGuesses: safeNumber(row.avg_guesses),
+          maxStreak: row.max_streak || 0,
+        },
+        h2h: {yourWins: 0, theirWins: 0}, // Will be populated separately
+      };
+    });
+  }
+
+  /**
+   * Get global leaderboard with stale-while-revalidate caching
+   *
+   * @param limit - Max number of users to return
+   * @param onFreshData - Optional callback for when fresh data arrives
+   * @returns Cached data immediately if available, otherwise fetches from API
+   */
+  async getGlobalLeaderboard(
+    limit = 20,
+    onFreshData?: OnFreshData<Friend[]>,
+  ): Promise<Friend[]> {
+    // Check cache first
+    const cached = getCache<Friend[]>(CACHE_KEYS.GLOBAL_LEADERBOARD);
+    const isStale = isCacheStale(CACHE_KEYS.GLOBAL_LEADERBOARD);
+
+    // If we have cached data
+    if (cached !== null) {
+      // If stale, trigger background refresh
+      if (isStale && onFreshData) {
+        this.fetchGlobalLeaderboardFromApi(limit)
+          .then(freshData => {
+            setCache(CACHE_KEYS.GLOBAL_LEADERBOARD, freshData);
+            onFreshData(freshData);
+          })
+          .catch(err => {
+            console.error('Background global leaderboard refresh failed:', err);
+          });
+      }
+      // Return cached data immediately (sliced to limit)
+      return cached.slice(0, limit);
+    }
+
+    // No cache - fetch from API
     try {
-      const {data: {user}} = await supabase.auth.getUser();
-      if (!user) {
-        return [];
-      }
-
-      // Call the leaderboard function
-      const {data, error} = await supabase.rpc('get_leaderboard', {
-        p_user_id: user.id,
-        p_friends_only: false,
-        p_period: 'alltime',
-        p_limit: limit,
-      });
-
-      if (error || !data) {
-        return [];
-      }
-
-      // Fetch today's results for these users
-      const userIds = data.map((row: any) => row.user_id);
-      const todayResults = await this.getTodayResults(userIds);
-
-      // Transform to Friend type
-      return data.map((row: any) => {
-        const todayResult = todayResults.get(row.user_id);
-        return {
-          id: row.user_id,
-          name: row.display_name || row.username,
-          letter: (row.display_name || row.username).charAt(0).toUpperCase(),
-          friendCode: row.friend_code,
-          streak: row.current_streak || 0,
-          lastPlayed: todayResult ? 'today' : 'inactive',
-          todayResult: todayResult
-            ? {
-                won: todayResult.won,
-                guesses: todayResult.guesses,
-                feedback: todayResult.feedback,
-              }
-            : undefined,
-          stats: {
-            played: row.games_played || 0,
-            won: row.games_won || 0,
-            winRate: parseFloat(row.win_rate) || 0,
-            avgGuesses: parseFloat(row.avg_guesses) || 0,
-            maxStreak: row.max_streak || 0,
-          },
-          h2h: {yourWins: 0, theirWins: 0}, // Will be populated separately
-        };
-      });
+      const leaderboard = await this.fetchGlobalLeaderboardFromApi(limit);
+      setCache(CACHE_KEYS.GLOBAL_LEADERBOARD, leaderboard);
+      return leaderboard;
     } catch (err) {
       console.error('Failed to fetch global leaderboard:', err);
       return [];
@@ -467,10 +614,12 @@ class SupabaseFriendsService implements IFriendsService {
     }
 
     try {
-      const {data: {user}} = await supabase.auth.getUser();
-      if (!user) {
+      // Use getSession() - cached locally, no network call
+      const {data: {session}} = await supabase.auth.getSession();
+      if (!session?.user) {
         return [];
       }
+      const user = session.user;
 
       const {data, error} = await supabase.rpc('get_leaderboard', {
         p_user_id: user.id,
@@ -507,8 +656,8 @@ class SupabaseFriendsService implements IFriendsService {
           stats: {
             played: row.games_played || 0,
             won: row.games_won || 0,
-            winRate: parseFloat(row.win_rate) || 0,
-            avgGuesses: parseFloat(row.avg_guesses) || 0,
+            winRate: safeNumber(row.win_rate),
+            avgGuesses: safeNumber(row.avg_guesses),
             maxStreak: row.max_streak || 0,
           },
           h2h: {yourWins: 0, theirWins: 0}, // Will be populated separately
