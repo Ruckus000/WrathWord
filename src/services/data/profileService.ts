@@ -182,8 +182,11 @@ class SupabaseProfileService implements IProfileService {
   }
 
   async syncStats(): Promise<void> {
+    console.log('[ProfileService] syncStats called');
+
     const supabase = getSupabase();
     if (!supabase) {
+      console.warn('[ProfileService] No Supabase client - skipping sync');
       return;
     }
 
@@ -191,9 +194,11 @@ class SupabaseProfileService implements IProfileService {
       // Use getSession() - cached locally, no network call
       const {data: {session}} = await supabase.auth.getSession();
       if (!session?.user) {
+        console.warn('[ProfileService] No session - skipping sync');
         return;
       }
       const user = session.user;
+      console.log('[ProfileService] Syncing stats for user:', user.id);
 
       const localProfile = getLocalProfile();
 
@@ -204,8 +209,18 @@ class SupabaseProfileService implements IProfileService {
           continue;
         }
 
+        // Skip if no games played for this length
+        if (stats.gamesPlayed === 0) {
+          continue;
+        }
+
+        console.log(`[ProfileService] Upserting stats for length ${length}:`, {
+          gamesPlayed: stats.gamesPlayed,
+          gamesWon: stats.gamesWon,
+        });
+
         // Upsert stats to Supabase
-        await supabase.from('game_stats').upsert({
+        const {error} = await supabase.from('game_stats').upsert({
           user_id: user.id,
           word_length: length,
           games_played: stats.gamesPlayed,
@@ -218,9 +233,15 @@ class SupabaseProfileService implements IProfileService {
           last_played_date: stats.lastPlayedDate,
           updated_at: new Date().toISOString(),
         });
+
+        if (error) {
+          console.error(`[ProfileService] Upsert failed for length ${length}:`, error.message);
+        } else {
+          console.log(`[ProfileService] Stats synced for length ${length}`);
+        }
       }
     } catch (err) {
-      console.error('Failed to sync stats:', err);
+      console.error('[ProfileService] syncStats error:', err);
     }
   }
 

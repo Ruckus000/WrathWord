@@ -75,9 +75,11 @@ class SupabaseGameResultsService implements IGameResultsService {
       maxRows: result.maxRows,
       date: result.date,
     });
+    console.log('[GameResultsService] Saved locally');
 
     const supabase = getSupabase();
     if (!supabase) {
+      console.warn('[GameResultsService] No Supabase client - skipping cloud sync');
       return;
     }
 
@@ -85,12 +87,14 @@ class SupabaseGameResultsService implements IGameResultsService {
       // Use getSession() - cached locally, no network call
       const {data: {session}} = await supabase.auth.getSession();
       if (!session?.user) {
+        console.warn('[GameResultsService] No session - skipping cloud sync');
         return;
       }
       const user = session.user;
+      console.log('[GameResultsService] Session found, syncing to Supabase...');
 
       // Save to Supabase
-      await supabase.from('game_results').insert({
+      const {error} = await supabase.from('game_results').insert({
         user_id: user.id,
         word_length: result.wordLength,
         won: result.won,
@@ -100,11 +104,18 @@ class SupabaseGameResultsService implements IGameResultsService {
         feedback: result.feedback,
       });
 
+      if (error) {
+        console.error('[GameResultsService] Insert failed:', error.message);
+        return;
+      }
+      console.log('[GameResultsService] game_results insert succeeded');
+
       // Sync aggregated stats to game_stats table
       // This ensures leaderboards have fresh data
       await getProfileService().syncStats();
+      console.log('[GameResultsService] Stats sync complete');
     } catch (err) {
-      console.error('Failed to save game result to Supabase:', err);
+      console.error('[GameResultsService] Sync error:', err);
       // Fail silently - local save is already done
     }
   }
