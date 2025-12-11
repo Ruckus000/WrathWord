@@ -6,7 +6,8 @@
  */
 
 import {isDevelopment} from '../../config/environment';
-import {getSupabase} from '../supabase/client';
+import {getSupabase, getCachedSession} from '../supabase/client';
+import {directInsert} from '../supabase/directRpc';
 import {TileState} from '../../logic/evaluateGuess';
 import {recordGameResult as recordLocal} from '../../storage/profile';
 import {getProfileService} from './profileService';
@@ -67,6 +68,14 @@ class SupabaseGameResultsService implements IGameResultsService {
   async saveGameResult(
     result: Omit<GameResult, 'id' | 'userId' | 'createdAt'>,
   ): Promise<void> {
+    // DIAGNOSTIC: Trace exactly what's happening
+    console.log('[GameResultsService] saveGameResult called');
+    const cachedSession = getCachedSession();
+    console.log('[GameResultsService] getCachedSession() =', cachedSession ? 'EXISTS' : 'NULL');
+    if (cachedSession) {
+      console.log('[GameResultsService] user.id =', cachedSession.user.id);
+    }
+
     // Always save locally first
     recordLocal({
       length: result.wordLength,
@@ -77,32 +86,31 @@ class SupabaseGameResultsService implements IGameResultsService {
     });
     console.log('[GameResultsService] Saved locally');
 
-    const supabase = getSupabase();
-    if (!supabase) {
-      console.warn('[GameResultsService] No Supabase client - skipping cloud sync');
+    // Use cached session (avoids getSession() which hangs)
+    const session = getCachedSession();
+    if (!session) {
+      console.warn(
+        '[GameResultsService] No cached session - skipping cloud sync',
+      );
       return;
     }
+    console.log('[GameResultsService] Using cached session for user:', session.user.id);
 
     try {
-      // Use getSession() - cached locally, no network call
-      const {data: {session}} = await supabase.auth.getSession();
-      if (!session?.user) {
-        console.warn('[GameResultsService] No session - skipping cloud sync');
-        return;
-      }
-      const user = session.user;
-      console.log('[GameResultsService] Session found, syncing to Supabase...');
-
-      // Save to Supabase
-      const {error} = await supabase.from('game_results').insert({
-        user_id: user.id,
-        word_length: result.wordLength,
-        won: result.won,
-        guesses: result.guesses,
-        max_rows: result.maxRows,
-        date: result.date,
-        feedback: result.feedback,
-      });
+      // Use directInsert with timeout (avoids Supabase JS client pipeline)
+      const {error} = await directInsert(
+        'game_results',
+        {
+          user_id: session.user.id,
+          word_length: result.wordLength,
+          won: result.won,
+          guesses: result.guesses,
+          max_rows: result.maxRows,
+          date: result.date,
+          feedback: result.feedback,
+        },
+        session.accessToken,
+      );
 
       if (error) {
         console.error('[GameResultsService] Insert failed:', error.message);
@@ -112,10 +120,15 @@ class SupabaseGameResultsService implements IGameResultsService {
 
       // Sync aggregated stats to game_stats table
       // This ensures leaderboards have fresh data
+      console.log('[GameResultsService] About to call syncStats()...');
+      const startSync = Date.now();
       await getProfileService().syncStats();
+      console.log(
+        `[GameResultsService] syncStats() returned in ${Date.now() - startSync}ms`,
+      );
       console.log('[GameResultsService] Stats sync complete');
     } catch (err) {
-      console.error('[GameResultsService] Sync error:', err);
+      console.error('[GameResultsService] Exception caught:', err);
       // Fail silently - local save is already done
     }
   }
@@ -212,6 +225,8 @@ export function getGameResultsService(): IGameResultsService {
 }
 
 export const gameResultsService = getGameResultsService();
+
+
 
 
 
