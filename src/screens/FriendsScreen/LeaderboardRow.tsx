@@ -4,6 +4,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import {palette} from '../../theme/colors';
 import {Friend} from '../../data/mockFriends';
 import {Period} from './SegmentControl';
+import {Scope} from './ScopeToggle';
 
 type Props = {
   friend: Friend;
@@ -13,6 +14,7 @@ type Props = {
   isYou?: boolean;
   isFriend?: boolean;
   onPress: () => void;
+  scope?: Scope;
 };
 
 export default function LeaderboardRow({
@@ -23,10 +25,12 @@ export default function LeaderboardRow({
   isYou,
   isFriend = false,
   onPress,
+  scope = 'friends',
 }: Props) {
   const isInactive = friend.lastPlayed === 'inactive';
   const playedToday = friend.lastPlayed === 'today';
-  const showSpoilerFree = period === 'today' && !userPlayedToday;
+  // Only apply spoiler-free mode for friends scope (not global)
+  const showSpoilerFree = period === 'today' && !userPlayedToday && scope === 'friends';
 
   const avatarColors: [string, string] = isYou
     ? [palette.avatarBlueStart, palette.avatarBlueEnd]
@@ -78,14 +82,14 @@ export default function LeaderboardRow({
               : 'Not played yet'
             : period === 'today' && friend.todayResult
             ? `Solved in ${friend.todayResult.guesses}`
-            : `${friend.stats.played} games · ${friend.stats.avgGuesses} avg`}
+            : `${friend.stats.played || 0} games · ${friend.stats.avgGuesses || 0} avg`}
         </Text>
       </View>
 
       {/* Stat */}
       {period === 'alltime' ? (
         <View style={styles.statPill}>
-          <Text style={styles.statPillValue}>{friend.stats.winRate}%</Text>
+          <Text style={styles.statPillValue}>{friend.stats.winRate || 0}%</Text>
           <Text style={styles.statPillLabel}>Win Rate</Text>
         </View>
       ) : (

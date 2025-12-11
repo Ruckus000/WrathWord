@@ -21,6 +21,7 @@ type Props = {
   friendsLoading?: boolean;
   friendsError?: string | null;
   onRetryFriends?: () => void;
+  accessToken?: string | null;
 };
 
 export default function Leaderboard({
@@ -34,6 +35,7 @@ export default function Leaderboard({
   friendsLoading = false,
   friendsError = null,
   onRetryFriends,
+  accessToken = null,
 }: Props) {
   const [globalUsers, setGlobalUsers] = useState<Friend[]>([]);
   const [loadingGlobal, setLoadingGlobal] = useState(false);
@@ -46,17 +48,25 @@ export default function Leaderboard({
   const userStats = useUserStats();
 
   const loadGlobalLeaderboard = useCallback(async () => {
+    const currentUserId = user?.id;
+    if (!currentUserId) {
+      console.log('[Leaderboard] loadGlobalLeaderboard: No userId, skipping');
+      return;
+    }
     setLoadingGlobal(true);
     setGlobalError(null);
     try {
       // Use stale-while-revalidate pattern
       // If cached data exists, it returns immediately
       // Fresh data callback updates state when API responds
+      // Pass userId and accessToken for direct API calls (bypasses Supabase JS client)
+      // TODO: RPC should guarantee user inclusion regardless of limit
+      // Proper fix: UNION user's row in get_leaderboard RPC
       const data = await withTimeout(
-        friendsService.getGlobalLeaderboard(50, freshData => {
+        friendsService.getGlobalLeaderboard(200, freshData => {
           // Called when fresh data arrives (background refresh)
           setGlobalUsers(freshData);
-        }),
+        }, currentUserId, accessToken ?? undefined),
         DEFAULT_TIMEOUT,
         'Loading leaderboard timed out',
       );
@@ -70,21 +80,18 @@ export default function Leaderboard({
     } finally {
       setLoadingGlobal(false);
     }
-  }, []);
+  }, [user?.id, accessToken]);
 
   // Load global leaderboard when scope changes to global
   useEffect(() => {
-    if (scope === 'global' && !globalLoaded && !loadingGlobal) {
+    if (scope === 'global' && !globalLoaded && !loadingGlobal && user?.id) {
       loadGlobalLeaderboard();
     }
-  }, [scope, globalLoaded, loadingGlobal, loadGlobalLeaderboard]);
+  }, [scope, globalLoaded, loadingGlobal, loadGlobalLeaderboard, user?.id]);
 
-  // Determine data source and user rank based on scope
+  // Determine data source based on scope
   const users = scope === 'friends' ? friends : globalUsers;
-  // Calculate global rank based on position in leaderboard
   const userId = user?.id ?? 'current-user';
-  const globalRankIndex = globalUsers.findIndex(u => u.id === userId);
-  const currentUserRank = scope === 'friends' ? userRank : (globalRankIndex >= 0 ? globalRankIndex + 1 : globalUsers.length + 1);
 
   // Sort users based on period
   const sortedUsers = [...users].sort((a, b) => {
@@ -96,50 +103,6 @@ export default function Leaderboard({
       return b.stats.winRate - a.stats.winRate;
     }
   });
-
-  // Build leaderboard with user inserted at correct position
-  type LeaderboardEntry = {
-    type: 'user' | 'friend';
-    friend?: Friend;
-    rank: number;
-  };
-
-  const buildLeaderboard = (): LeaderboardEntry[] => {
-    const list: LeaderboardEntry[] = [];
-    let userInserted = false;
-    let currentRank = 1;
-
-    for (const friend of sortedUsers) {
-      // Insert user at their rank position
-      if (!userInserted && currentRank >= currentUserRank && userPlayedToday) {
-        list.push({type: 'user', rank: currentUserRank});
-        userInserted = true;
-        currentRank++;
-      }
-
-      list.push({
-        type: 'friend',
-        friend,
-        rank: currentRank,
-      });
-      currentRank++;
-    }
-
-    // If user hasn't been inserted yet, add at end
-    if (!userInserted && userPlayedToday) {
-      list.push({type: 'user', rank: currentRank});
-    }
-
-    return list;
-  };
-
-  const leaderboard = buildLeaderboard();
-
-  const getMetricLabel = () => {
-    if (period === 'alltime') return 'Win Rate';
-    if (period === 'week') return 'Avg. Guesses';
-    return 'Streak';
-  };
 
   // Create a "friend" object for the user to pass to LeaderboardRow
   const userAsFriend: Friend = {
@@ -165,6 +128,165 @@ export default function Leaderboard({
     },
     h2h: {yourWins: 0, theirWins: 0},
   };
+
+  // Discriminated union for leaderboard entries
+  type LeaderboardEntry =
+    | {type: 'player'; friend: Friend; rank: number; isYou?: boolean}
+    | {type: 'separator'; hiddenCount: number};
+
+  // Calculate user rank client-side from sorted array
+  const userIndexInSorted = sortedUsers.findIndex(u => u.id === userId);
+  const calculatedUserRank =
+    userIndexInSorted >= 0
+      ? userIndexInSorted + 1
+      : sortedUsers.length + 1; // User at end if not in list
+
+  // Use passed userRank for friends scope, calculated for global
+  const effectiveUserRank =
+    scope === 'friends' ? userRank : calculatedUserRank;
+
+  // Build flat leaderboard (current behavior - show all)
+  const buildFlatLeaderboard = (): LeaderboardEntry[] => {
+    const list: LeaderboardEntry[] = [];
+    let userInserted = false;
+    let currentRank = 1;
+
+    for (const friend of sortedUsers) {
+      // Insert user at their rank position
+      if (!userInserted && currentRank >= effectiveUserRank && userPlayedToday) {
+        list.push({type: 'player', friend: userAsFriend, rank: effectiveUserRank, isYou: true});
+        userInserted = true;
+        currentRank++;
+      }
+
+      list.push({
+        type: 'player',
+        friend,
+        rank: currentRank,
+      });
+      currentRank++;
+    }
+
+    // If user hasn't been inserted yet, add at end
+    if (!userInserted && userPlayedToday) {
+      list.push({type: 'player', friend: userAsFriend, rank: currentRank, isYou: true});
+    }
+
+    return list;
+  };
+
+  // Build top 10 leaderboard (for when user is in top 7)
+  const buildTop10Leaderboard = (): LeaderboardEntry[] => {
+    const list: LeaderboardEntry[] = [];
+    let userInserted = false;
+    let currentRank = 1;
+
+    // Only take first 10 entries
+    const top10 = sortedUsers.slice(0, 10);
+
+    for (const friend of top10) {
+      // Insert user at their rank position
+      if (!userInserted && currentRank >= effectiveUserRank && userPlayedToday) {
+        list.push({type: 'player', friend: userAsFriend, rank: effectiveUserRank, isYou: true});
+        userInserted = true;
+        currentRank++;
+      }
+
+      if (list.length >= 10) break;
+
+      list.push({
+        type: 'player',
+        friend,
+        rank: currentRank,
+      });
+      currentRank++;
+    }
+
+    // If user hasn't been inserted yet and should be in top 10
+    if (!userInserted && userPlayedToday && effectiveUserRank <= 10) {
+      list.push({type: 'player', friend: userAsFriend, rank: effectiveUserRank, isYou: true});
+    }
+
+    return list.slice(0, 10);
+  };
+
+  // Build condensed leaderboard (top 5 + separator + user context)
+  const buildCondensedLeaderboard = (): LeaderboardEntry[] => {
+    const list: LeaderboardEntry[] = [];
+
+    // Add top 5
+    for (let i = 0; i < Math.min(5, sortedUsers.length); i++) {
+      list.push({
+        type: 'player',
+        friend: sortedUsers[i],
+        rank: i + 1,
+      });
+    }
+
+    // Calculate hidden count (players between rank 5 and user's neighbor above)
+    // User rank 8+ means user's neighbor above is at rank-1
+    // Hidden = (userRank - 1) - 5 - 1 = userRank - 7
+    const hiddenCount = effectiveUserRank - 7;
+
+    if (hiddenCount > 0) {
+      list.push({type: 'separator', hiddenCount});
+    }
+
+    // Add user context: neighbor above, user, neighbor below
+    // Neighbor above is at rank-1 (index rank-2 in sortedUsers since user isn't in array)
+    const neighborAboveIndex = effectiveUserRank - 2; // -1 for rank-to-index, -1 for user not in array
+    const neighborBelowIndex = effectiveUserRank - 1; // user's rank position in sortedUsers (since user not in array)
+
+    // Add neighbor above if exists and not already shown in top 5
+    if (neighborAboveIndex >= 5 && neighborAboveIndex < sortedUsers.length) {
+      list.push({
+        type: 'player',
+        friend: sortedUsers[neighborAboveIndex],
+        rank: effectiveUserRank - 1,
+      });
+    }
+
+    // Add user
+    if (userPlayedToday) {
+      list.push({type: 'player', friend: userAsFriend, rank: effectiveUserRank, isYou: true});
+    }
+
+    // Add neighbor below if exists
+    if (neighborBelowIndex < sortedUsers.length) {
+      list.push({
+        type: 'player',
+        friend: sortedUsers[neighborBelowIndex],
+        rank: effectiveUserRank + 1,
+      });
+    }
+
+    return list;
+  };
+
+  // Main build function with condensed view logic
+  const buildLeaderboard = (): LeaderboardEntry[] => {
+    const totalPlayers = sortedUsers.length + (userPlayedToday ? 1 : 0);
+
+    // Rule: Always show all for friends scope (list is small)
+    if (scope === 'friends') {
+      return buildFlatLeaderboard();
+    }
+
+    // Rule: Show all if ≤ 10 players
+    if (totalPlayers <= 10) {
+      return buildFlatLeaderboard();
+    }
+
+    // Rule: User in top 7 → show top 10
+    if (effectiveUserRank <= 7) {
+      return buildTop10Leaderboard();
+    }
+
+    // Rule: User rank 8+ → condensed view
+    return buildCondensedLeaderboard();
+  };
+
+  const leaderboard = buildLeaderboard();
 
   return (
     <View style={styles.container}>
@@ -211,43 +333,47 @@ export default function Leaderboard({
         ) : /* Empty state */ leaderboard.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyTitle}>
-              {scope === 'friends' ? 'No Friends Yet' : 'No Players Found'}
+              {scope === 'friends' ? 'No Friends Yet' : 'No Rankings Yet'}
             </Text>
             <Text style={styles.emptySubtitle}>
               {scope === 'friends'
-                ? 'Add friends to compete with them!'
-                : 'Be the first to play today!'}
+                ? 'Add friends using their friend code to compete!'
+                : 'Play at least 5 games to appear on the leaderboard!'}
             </Text>
           </View>
         ) : (
         <View style={styles.list}>
           {leaderboard.map((entry, idx) => {
-            if (entry.type === 'user') {
+            if (entry.type === 'separator') {
               return (
-                <LeaderboardRow
-                  key="you"
-                  friend={userAsFriend}
-                  rank={entry.rank}
-                  period={period}
-                  userPlayedToday={userPlayedToday}
-                  isYou
-                  isFriend={false}
-                  onPress={() => {}}
-                />
+                <View key="separator" style={styles.separator}>
+                  <View style={styles.separatorLine} />
+                  <Text style={styles.separatorText}>
+                    {entry.hiddenCount} more players
+                  </Text>
+                  <View style={styles.separatorLine} />
+                </View>
               );
             }
+
+            // entry.type === 'player'
             return (
               <LeaderboardRow
-                key={entry.friend!.id}
-                friend={entry.friend!}
+                key={entry.isYou ? 'you' : entry.friend.id}
+                friend={entry.friend}
                 rank={entry.rank}
                 period={period}
                 userPlayedToday={userPlayedToday}
+                isYou={entry.isYou}
                 isFriend={
+                  !entry.isYou &&
                   scope === 'global' &&
-                  friends.some(f => f.id === entry.friend!.id)
+                  friends.some(f => f.id === entry.friend.id)
                 }
-                onPress={() => onFriendPress(entry.friend!)}
+                onPress={() =>
+                  entry.isYou ? {} : onFriendPress(entry.friend)
+                }
+                scope={scope}
               />
             );
           })}
@@ -344,5 +470,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: palette.textPrimary,
+  },
+  separator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  separatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: palette.cardBorder,
+  },
+  separatorText: {
+    fontSize: 12,
+    color: palette.textDim,
   },
 });
