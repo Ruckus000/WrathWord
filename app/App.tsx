@@ -9,14 +9,12 @@ import StatsScreen from '../src/screens/StatsScreen';
 import FriendsScreen from '../src/screens/FriendsScreen';
 import {SignInScreen, SignUpScreen} from '../src/screens/Auth';
 import {AuthProvider, useAuth} from '../src/contexts/AuthContext';
-import {useUserPlayedToday} from '../src/hooks/useUserPlayedToday';
 
 type Screen = 'game' | 'stats' | 'friends' | 'signin' | 'signup';
 
 function AppContent() {
   const {isAuthenticated, loading, isDevelopmentMode} = useAuth();
   const [currentScreen, setCurrentScreen] = useState<Screen>('game');
-  const userPlayedToday = useUserPlayedToday();
 
   // Hide splash screen when auth loading completes
   useEffect(() => {
@@ -55,7 +53,6 @@ function AppContent() {
       <FriendsScreen
         onBack={() => setCurrentScreen('stats')}
         onPlayNow={() => setCurrentScreen('game')}
-        userPlayedToday={userPlayedToday}
       />
     );
   }

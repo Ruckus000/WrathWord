@@ -41,7 +41,7 @@ export function Logo({size = 'large'}: LogoProps) {
         },
       ]}>
       <Image
-        source={require('../../assets/bootsplash/logo@3x.png')}
+        source={require('../../assets/bootsplash/logo.png')}
         style={{
           width: dimension,
           height: dimension,

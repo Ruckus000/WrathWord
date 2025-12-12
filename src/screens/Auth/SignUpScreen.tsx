@@ -106,7 +106,21 @@ export default function SignUpScreen({
     setLoading(true);
 
     try {
-      const result = await authService.signUp(email, password, username);
+      // Add 15 second timeout to prevent infinite hanging on network issues
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error('Sign up timed out. Please check your connection.'),
+            ),
+          15000,
+        ),
+      );
+
+      const result = await Promise.race([
+        authService.signUp(email, password, username),
+        timeoutPromise,
+      ]);
 
       if (result.error) {
         // Check if this is email confirmation required (not an error, it's success!)
@@ -120,9 +134,9 @@ export default function SignUpScreen({
         return;
       }
 
-      // Immediate success (no email confirmation required)
-      // Auth state change will update isAuthenticated via AuthContext
+      // Immediate success (no email confirmation required) - navigate to game
       setLoading(false);
+      onSignUpSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create account');
       setLoading(false);
@@ -448,4 +462,8 @@ const confirmStyles = StyleSheet.create({
     marginTop: 24,
   },
 });
+
+
+
+
 

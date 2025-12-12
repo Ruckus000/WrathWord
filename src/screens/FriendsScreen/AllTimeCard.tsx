@@ -11,9 +11,11 @@ type Props = {
 };
 
 function getOrdinalSuffix(n: number): string {
+  if (n <= 0 || isNaN(n)) return 'th';
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
-  return s[(v - 20) % 10] || s[v] || s[0];
+  if (v >= 11 && v <= 13) return 'th';
+  return s[v % 10] || 'th';
 }
 
 export default function AllTimeCard({
@@ -49,11 +51,11 @@ export default function AllTimeCard({
 
         <View style={styles.stats}>
           <View style={styles.stat}>
-            <Text style={styles.statValue}>{winRate}%</Text>
+            <Text style={styles.statValue}>{isNaN(winRate) ? 0 : winRate}%</Text>
             <Text style={styles.statLabel}>Win Rate</Text>
           </View>
           <View style={styles.stat}>
-            <Text style={styles.statValue}>{avgGuesses}</Text>
+            <Text style={styles.statValue}>{isNaN(avgGuesses) ? 0 : avgGuesses}</Text>
             <Text style={styles.statLabel}>Avg. Guesses</Text>
           </View>
         </View>

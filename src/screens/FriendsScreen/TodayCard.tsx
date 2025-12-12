@@ -16,9 +16,11 @@ type Props = {
 };
 
 function getOrdinalSuffix(n: number): string {
+  if (n <= 0 || isNaN(n)) return 'th';
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
-  return s[(v - 20) % 10] || s[v] || s[0];
+  if (v >= 11 && v <= 13) return 'th';
+  return s[v % 10] || 'th';
 }
 
 export default function TodayCard({
@@ -50,9 +52,9 @@ export default function TodayCard({
     return () => pulse.stop();
   }, [pulseAnim]);
 
-  const betterThanPercent = Math.round(
-    ((totalPlayed - userRank) / totalPlayed) * 100,
-  );
+  const betterThanPercent = totalPlayed > 0
+    ? Math.round(((totalPlayed - userRank) / totalPlayed) * 100)
+    : 0;
 
   const today = new Date();
   const dateStr = today.toLocaleDateString('en-US', {

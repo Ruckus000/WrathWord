@@ -8,13 +8,7 @@ type Props = {
   totalFriends: number;
 };
 
-function getOrdinalSuffix(n: number): string {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return s[(v - 20) % 10] || s[v] || s[0];
-}
-
-export default function WeekCard({userRank, totalFriends}: Props) {
+export default function WeekCard({}: Props) {
   return (
     <LinearGradient
       colors={['rgba(34, 197, 94, 0.08)', 'rgba(59, 130, 246, 0.08)']}
@@ -28,11 +22,8 @@ export default function WeekCard({userRank, totalFriends}: Props) {
         </View>
       </View>
       <View style={styles.position}>
-        <Text style={styles.positionRank}>
-          {userRank}
-          <Text style={styles.positionSup}>{getOrdinalSuffix(userRank)}</Text>
-        </Text>
-        <Text style={styles.positionLabel}>of {totalFriends} friends</Text>
+        <Text style={styles.comingSoon}>Coming Soon</Text>
+        <Text style={styles.comingSoonSub}>Weekly rankings will be available in a future update</Text>
       </View>
     </LinearGradient>
   );
@@ -72,21 +63,15 @@ const styles = StyleSheet.create({
   position: {
     alignItems: 'flex-start',
   },
-  positionRank: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: palette.textPrimary,
-    lineHeight: 28,
-  },
-  positionSup: {
-    fontSize: 14,
-    fontWeight: '600',
+  comingSoon: {
+    fontSize: 22,
+    fontWeight: '700',
     color: palette.textMuted,
+    marginBottom: 4,
   },
-  positionLabel: {
-    fontSize: 11,
+  comingSoonSub: {
+    fontSize: 12,
     color: palette.textDim,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
+    lineHeight: 16,
   },
 });

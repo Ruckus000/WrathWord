@@ -6,6 +6,7 @@ import {ChevronLeft, PlusIcon} from '../../components/icons/SettingsIcons';
 import {Friend} from '../../data/mockFriends';
 import {friendsService} from '../../services/data';
 import {useUserTodayResult, useUserStats} from '../../hooks';
+import {useAuth} from '../../contexts/AuthContext';
 import {withTimeout, DEFAULT_TIMEOUT} from '../../services/utils/timeout';
 
 import SegmentControl, {Period} from './SegmentControl';
@@ -21,13 +22,11 @@ import AddFriendsModal from './AddFriendsModal';
 type Props = {
   onBack: () => void;
   onPlayNow?: () => void;
-  userPlayedToday?: boolean;
 };
 
 export default function FriendsScreen({
   onBack,
   onPlayNow,
-  userPlayedToday = false,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('today');
@@ -39,27 +38,41 @@ export default function FriendsScreen({
   const [loading, setLoading] = useState(false); // Start false - show UI immediately
   const [error, setError] = useState<string | null>(null);
 
+  // Get user from auth context - this avoids calling getSession which can hang
+  const {user, accessToken} = useAuth();
+  const userId = user?.id;
+
   // Get actual user data from hooks
   const userTodayResult = useUserTodayResult();
   const userStats = useUserStats();
 
-  // Load friends on mount
+  // Derive played status from actual result data (single source of truth)
+  const userPlayedToday = !!userTodayResult;
+
+  // Load friends on mount or when userId changes
   useEffect(() => {
-    loadFriends();
-  }, []);
+    if (userId) {
+      loadFriends();
+    }
+  }, [userId]);
 
   const loadFriends = useCallback(async () => {
+    if (!userId) {
+      console.log('[FriendsScreen] loadFriends: No userId, skipping');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       // Use stale-while-revalidate pattern
       // If cached data exists, it returns immediately
       // Fresh data callback updates state when API responds
+      // Pass userId and accessToken for direct API calls (bypasses Supabase JS client)
       const friendsData = await withTimeout(
         friendsService.getFriends(freshData => {
           // Called when fresh data arrives (background refresh)
           setFriends(freshData);
-        }),
+        }, userId, accessToken ?? undefined),
         DEFAULT_TIMEOUT,
         'Loading friends timed out',
       );
@@ -72,7 +85,7 @@ export default function FriendsScreen({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId, accessToken]);
 
   const handleFriendPress = useCallback((friend: Friend) => {
     setSelectedFriend(friend);
@@ -173,6 +186,7 @@ export default function FriendsScreen({
           friendsLoading={loading}
           friendsError={error}
           onRetryFriends={loadFriends}
+          accessToken={accessToken}
         />
       </View>
 

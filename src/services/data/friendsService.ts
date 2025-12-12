@@ -12,6 +12,7 @@
 
 import {isDevelopment} from '../../config/environment';
 import {getSupabase} from '../supabase/client';
+import {directRpc, directQuery} from '../supabase/directRpc';
 import {Friend} from '../../data/mockFriends';
 import {MOCK_FRIENDS} from '../../data/mockFriends';
 import {
@@ -46,8 +47,10 @@ export interface IFriendsService {
   /**
    * Get friends list with optional cache callback
    * @param onFreshData - Called when fresh data arrives (for stale-while-revalidate)
+   * @param userId - Optional user ID to avoid calling getSession (which can hang)
+   * @param accessToken - Optional access token for direct API calls (bypasses Supabase JS client)
    */
-  getFriends(onFreshData?: OnFreshData<Friend[]>): Promise<Friend[]>;
+  getFriends(onFreshData?: OnFreshData<Friend[]>, userId?: string, accessToken?: string): Promise<Friend[]>;
   searchUserByFriendCode(friendCode: string): Promise<Friend | null>;
   sendFriendRequest(toUserId: string): Promise<void>;
   acceptFriendRequest(requestId: string): Promise<void>;
@@ -58,10 +61,14 @@ export interface IFriendsService {
    * Get global leaderboard with optional cache callback
    * @param limit - Max number of users to return
    * @param onFreshData - Called when fresh data arrives (for stale-while-revalidate)
+   * @param userId - Optional user ID to avoid calling getSession (which can hang)
+   * @param accessToken - Optional access token for direct API calls (bypasses Supabase JS client)
    */
   getGlobalLeaderboard(
     limit?: number,
     onFreshData?: OnFreshData<Friend[]>,
+    userId?: string,
+    accessToken?: string,
   ): Promise<Friend[]>;
   getFriendsLeaderboard(): Promise<Friend[]>;
   /**
@@ -75,7 +82,7 @@ export interface IFriendsService {
  * Returns hardcoded mock data
  */
 class MockFriendsService implements IFriendsService {
-  async getFriends(_onFreshData?: OnFreshData<Friend[]>): Promise<Friend[]> {
+  async getFriends(_onFreshData?: OnFreshData<Friend[]>, _userId?: string, _accessToken?: string): Promise<Friend[]> {
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 300));
     return MOCK_FRIENDS;
@@ -141,6 +148,8 @@ class MockFriendsService implements IFriendsService {
   async getGlobalLeaderboard(
     limit = 20,
     _onFreshData?: OnFreshData<Friend[]>,
+    _userId?: string,
+    _accessToken?: string,
   ): Promise<Friend[]> {
     await new Promise(resolve => setTimeout(resolve, 300));
     return MOCK_GLOBAL_USERS.slice(0, limit);
@@ -171,12 +180,58 @@ class SupabaseFriendsService implements IFriendsService {
 
   /**
    * Fetch today's game results for a list of users
+   * Uses direct PostgREST query to bypass Supabase JS client
    */
   private async getTodayResults(
     userIds: string[],
+    accessToken?: string,
   ): Promise<Map<string, {won: boolean; guesses: number; feedback?: any}>> {
+    if (userIds.length === 0) {
+      return new Map();
+    }
+
+    // If we have accessToken, use direct query (fast path)
+    if (accessToken) {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const {data, error} = await directQuery<{
+          user_id: string;
+          won: boolean;
+          guesses: number;
+          feedback: any;
+        }>({
+          table: 'game_results',
+          select: 'user_id,won,guesses,feedback',
+          filters: {
+            date: `eq.${today}`,
+            user_id: `in.(${userIds.join(',')})`,
+          },
+          accessToken,
+          timeoutMs: 5000,
+        });
+
+        if (error || !data) {
+          console.log('[FriendsService] getTodayResults direct query failed:', error?.message);
+          return new Map();
+        }
+
+        const resultsMap = new Map();
+        data.forEach(result => {
+          resultsMap.set(result.user_id, {
+            won: result.won,
+            guesses: result.guesses,
+            feedback: result.feedback,
+          });
+        });
+        return resultsMap;
+      } catch {
+        return new Map();
+      }
+    }
+
+    // Fallback to Supabase JS client (slower path)
     const supabase = getSupabase();
-    if (!supabase || userIds.length === 0) {
+    if (!supabase) {
       return new Map();
     }
 
@@ -247,40 +302,140 @@ class SupabaseFriendsService implements IFriendsService {
     }
   }
   /**
-   * Internal method to fetch friends from API (no caching)
+   * Helper to get session with timeout to prevent hangs during token refresh
    */
-  private async fetchFriendsFromApi(): Promise<Friend[]> {
+  private async getSessionWithTimeout(supabase: any, timeoutMs = 5000): Promise<{user: {id: string}} | null> {
+    return new Promise((resolve) => {
+      const timeoutId = setTimeout(() => {
+        console.log('[FriendsService] getSession timed out after', timeoutMs, 'ms');
+        resolve(null);
+      }, timeoutMs);
+
+      supabase.auth.getSession()
+        .then(({data}: {data: {session: any}}) => {
+          clearTimeout(timeoutId);
+          resolve(data.session);
+        })
+        .catch((err: any) => {
+          clearTimeout(timeoutId);
+          console.error('[FriendsService] getSession error:', err);
+          resolve(null);
+        });
+    });
+  }
+
+  /**
+   * Internal method to fetch friends from API (no caching)
+   * Uses directRpc to bypass Supabase JS client's blocking auth handling
+   * @param userId - Optional user ID to avoid calling getSession (which can hang during token refresh)
+   * @param accessToken - Optional access token for direct API calls (fast path)
+   */
+  private async fetchFriendsFromApi(userId?: string, accessToken?: string): Promise<Friend[]> {
+    console.log('[FriendsService] fetchFriendsFromApi: Starting... userId:', !!userId, 'accessToken:', !!accessToken);
+
+    // FAST PATH: Use directRpc if we have both userId and accessToken
+    if (userId && accessToken) {
+      console.log('[FriendsService] fetchFriendsFromApi: Using direct RPC (fast path)...');
+      const {data, error} = await directRpc<any[]>({
+        functionName: 'get_leaderboard',
+        params: {
+          p_user_id: userId,
+          p_friends_only: true,
+          p_period: 'alltime',
+          p_limit: 100,
+        },
+        accessToken,
+        timeoutMs: 8000,
+      });
+
+      if (error) {
+        console.error('[FriendsService] fetchFriendsFromApi: Direct RPC error:', error.message);
+        return [];
+      }
+
+      if (!data || data.length === 0) {
+        console.log('[FriendsService] fetchFriendsFromApi: No friends data returned');
+        return [];
+      }
+
+      console.log(`[FriendsService] fetchFriendsFromApi: Got ${data.length} friends`);
+
+      // Fetch today's results using direct query
+      const userIds = data.map((row: any) => row.user_id);
+      const todayResults = await this.getTodayResults(userIds, accessToken);
+
+      // Transform to Friend type
+      return data.map((row: any) => {
+        const todayResult = todayResults.get(row.user_id);
+        return {
+          id: row.user_id,
+          name: row.display_name || row.username,
+          letter: (row.display_name || row.username).charAt(0).toUpperCase(),
+          friendCode: row.friend_code,
+          streak: row.current_streak || 0,
+          lastPlayed: todayResult ? 'today' : 'inactive',
+          todayResult: todayResult
+            ? {
+                won: todayResult.won,
+                guesses: todayResult.guesses,
+                feedback: todayResult.feedback,
+              }
+            : undefined,
+          stats: {
+            played: row.games_played || 0,
+            won: row.games_won || 0,
+            winRate: safeNumber(row.win_rate),
+            avgGuesses: safeNumber(row.avg_guesses),
+            maxStreak: row.max_streak || 0,
+          },
+          h2h: {yourWins: 0, theirWins: 0},
+        };
+      });
+    }
+
+    // SLOW PATH: Fall back to Supabase JS client (may hang)
+    console.log('[FriendsService] fetchFriendsFromApi: Using Supabase JS client (slow fallback)...');
     const supabase = getSupabase();
     if (!supabase) {
+      console.log('[FriendsService] fetchFriendsFromApi: No supabase client');
       return [];
     }
 
-    // Use getSession() instead of getUser() - getSession is cached locally,
-    // getUser makes a network call that can hang during token refresh
-    const {data: {session}} = await supabase.auth.getSession();
-    if (!session?.user) {
-      return [];
+    // If userId was passed, use it directly (avoids getSession which can hang)
+    let finalUserId = userId;
+    if (!finalUserId) {
+      console.log('[FriendsService] fetchFriendsFromApi: No userId passed, getting session...');
+      const session = await this.getSessionWithTimeout(supabase);
+      if (!session?.user) {
+        console.log('[FriendsService] fetchFriendsFromApi: No session/user (timed out or not signed in)');
+        return [];
+      }
+      finalUserId = session.user.id;
     }
-    const user = session.user;
 
-    // Use the leaderboard function with friends_only to get all friend data
-    // This gives us both the friend list and their stats in one query
+    console.log('[FriendsService] fetchFriendsFromApi: Calling supabase.rpc (may hang)...');
     const {data, error} = await supabase.rpc('get_leaderboard', {
-      p_user_id: user.id,
+      p_user_id: finalUserId,
       p_friends_only: true,
       p_period: 'alltime',
-      p_limit: 100, // Get all friends
+      p_limit: 100,
     });
 
-    if (error || !data) {
+    if (error) {
+      console.error('[FriendsService] fetchFriendsFromApi: RPC error:', error);
       return [];
     }
 
-    // Fetch today's results for these friends
+    if (!data || data.length === 0) {
+      console.log('[FriendsService] fetchFriendsFromApi: No data returned');
+      return [];
+    }
+
+    console.log(`[FriendsService] fetchFriendsFromApi: Got ${data.length} friends`);
+
     const userIds = data.map((row: any) => row.user_id);
     const todayResults = await this.getTodayResults(userIds);
 
-    // Transform to Friend type
     return data.map((row: any) => {
       const todayResult = todayResults.get(row.user_id);
       return {
@@ -304,7 +459,7 @@ class SupabaseFriendsService implements IFriendsService {
           avgGuesses: safeNumber(row.avg_guesses),
           maxStreak: row.max_streak || 0,
         },
-        h2h: {yourWins: 0, theirWins: 0}, // Will be populated separately if needed
+        h2h: {yourWins: 0, theirWins: 0},
       };
     });
   }
@@ -313,18 +468,23 @@ class SupabaseFriendsService implements IFriendsService {
    * Get friends with stale-while-revalidate caching
    *
    * @param onFreshData - Optional callback for when fresh data arrives
+   * @param userId - Optional user ID to avoid calling getSession (which can hang)
+   * @param accessToken - Optional access token for direct API calls (bypasses Supabase JS client)
    * @returns Cached data immediately if available, otherwise fetches from API
    */
-  async getFriends(onFreshData?: OnFreshData<Friend[]>): Promise<Friend[]> {
+  async getFriends(onFreshData?: OnFreshData<Friend[]>, userId?: string, accessToken?: string): Promise<Friend[]> {
+    console.log('[FriendsService] getFriends: Starting... userId:', !!userId, 'accessToken:', !!accessToken);
     // Check cache first
     const cached = getCache<Friend[]>(CACHE_KEYS.FRIENDS);
     const isStale = isCacheStale(CACHE_KEYS.FRIENDS);
+    console.log(`[FriendsService] getFriends: Cache status - cached: ${cached !== null}, stale: ${isStale}`);
 
     // If we have cached data
     if (cached !== null) {
+      console.log(`[FriendsService] getFriends: Returning cached data (${cached.length} friends)`);
       // If stale, trigger background refresh
       if (isStale && onFreshData) {
-        this.fetchFriendsFromApi()
+        this.fetchFriendsFromApi(userId, accessToken)
           .then(freshData => {
             setCache(CACHE_KEYS.FRIENDS, freshData);
             onFreshData(freshData);
@@ -338,12 +498,14 @@ class SupabaseFriendsService implements IFriendsService {
     }
 
     // No cache - fetch from API
+    console.log('[FriendsService] getFriends: No cache, fetching from API...');
     try {
-      const friends = await this.fetchFriendsFromApi();
+      const friends = await this.fetchFriendsFromApi(userId, accessToken);
+      console.log(`[FriendsService] getFriends: Fetched ${friends.length} friends, caching...`);
       setCache(CACHE_KEYS.FRIENDS, friends);
       return friends;
     } catch (err) {
-      console.error('Failed to fetch friends:', err);
+      console.error('[FriendsService] getFriends: Failed to fetch:', err);
       return [];
     }
   }
@@ -505,37 +667,116 @@ class SupabaseFriendsService implements IFriendsService {
 
   /**
    * Internal method to fetch global leaderboard from API (no caching)
+   * Uses directRpc to bypass Supabase JS client's blocking auth handling
+   * @param userId - Optional user ID to avoid calling getSession (which can hang during token refresh)
+   * @param accessToken - Optional access token for direct API calls (fast path)
    */
-  private async fetchGlobalLeaderboardFromApi(limit: number): Promise<Friend[]> {
+  private async fetchGlobalLeaderboardFromApi(limit: number, userId?: string, accessToken?: string): Promise<Friend[]> {
+    console.log('[FriendsService] fetchGlobalLeaderboardFromApi: Starting... userId:', !!userId, 'accessToken:', !!accessToken);
+
+    // FAST PATH: Use directRpc if we have both userId and accessToken
+    if (userId && accessToken) {
+      console.log('[FriendsService] fetchGlobalLeaderboardFromApi: Using direct RPC (fast path)...');
+      const {data, error} = await directRpc<any[]>({
+        functionName: 'get_leaderboard',
+        params: {
+          p_user_id: userId,
+          p_friends_only: false,
+          p_period: 'alltime',
+          p_limit: limit,
+        },
+        accessToken,
+        timeoutMs: 8000,
+      });
+
+      if (error) {
+        console.error('[FriendsService] fetchGlobalLeaderboardFromApi: Direct RPC error:', error.message);
+        return [];
+      }
+
+      if (!data || data.length === 0) {
+        console.log('[FriendsService] fetchGlobalLeaderboardFromApi: No leaderboard data returned');
+        return [];
+      }
+
+      console.log(`[FriendsService] fetchGlobalLeaderboardFromApi: Got ${data.length} users`);
+
+      // Fetch today's results using direct query
+      const userIds = data.map((row: any) => row.user_id);
+      const todayResults = await this.getTodayResults(userIds, accessToken);
+
+      // Transform to Friend type
+      return data.map((row: any) => {
+        const todayResult = todayResults.get(row.user_id);
+        return {
+          id: row.user_id,
+          name: row.display_name || row.username,
+          letter: (row.display_name || row.username).charAt(0).toUpperCase(),
+          friendCode: row.friend_code,
+          streak: row.current_streak || 0,
+          lastPlayed: todayResult ? 'today' : 'inactive',
+          todayResult: todayResult
+            ? {
+                won: todayResult.won,
+                guesses: todayResult.guesses,
+                feedback: todayResult.feedback,
+              }
+            : undefined,
+          stats: {
+            played: row.games_played || 0,
+            won: row.games_won || 0,
+            winRate: safeNumber(row.win_rate),
+            avgGuesses: safeNumber(row.avg_guesses),
+            maxStreak: row.max_streak || 0,
+          },
+          h2h: {yourWins: 0, theirWins: 0},
+        };
+      });
+    }
+
+    // SLOW PATH: Fall back to Supabase JS client (may hang)
+    console.log('[FriendsService] fetchGlobalLeaderboardFromApi: Using Supabase JS client (slow fallback)...');
     const supabase = getSupabase();
     if (!supabase) {
+      console.log('[FriendsService] fetchGlobalLeaderboardFromApi: No supabase client');
       return [];
     }
 
-    // Use getSession() - cached locally, no network call
-    const {data: {session}} = await supabase.auth.getSession();
-    if (!session?.user) {
-      return [];
+    // If userId was passed, use it directly (avoids getSession which can hang)
+    let finalUserId = userId;
+    if (!finalUserId) {
+      console.log('[FriendsService] fetchGlobalLeaderboardFromApi: No userId passed, getting session...');
+      const session = await this.getSessionWithTimeout(supabase);
+      if (!session?.user) {
+        console.log('[FriendsService] fetchGlobalLeaderboardFromApi: No session/user (timed out or not signed in)');
+        return [];
+      }
+      finalUserId = session.user.id;
     }
-    const user = session.user;
 
-    // Call the leaderboard function
+    console.log('[FriendsService] fetchGlobalLeaderboardFromApi: Calling supabase.rpc (may hang)...');
     const {data, error} = await supabase.rpc('get_leaderboard', {
-      p_user_id: user.id,
+      p_user_id: finalUserId,
       p_friends_only: false,
       p_period: 'alltime',
       p_limit: limit,
     });
 
-    if (error || !data) {
+    if (error) {
+      console.error('[FriendsService] fetchGlobalLeaderboardFromApi: RPC error:', error);
       return [];
     }
 
-    // Fetch today's results for these users
+    if (!data || data.length === 0) {
+      console.log('[FriendsService] fetchGlobalLeaderboardFromApi: No data returned');
+      return [];
+    }
+
+    console.log(`[FriendsService] fetchGlobalLeaderboardFromApi: Got ${data.length} users`);
+
     const userIds = data.map((row: any) => row.user_id);
     const todayResults = await this.getTodayResults(userIds);
 
-    // Transform to Friend type
     return data.map((row: any) => {
       const todayResult = todayResults.get(row.user_id);
       return {
@@ -559,7 +800,7 @@ class SupabaseFriendsService implements IFriendsService {
           avgGuesses: safeNumber(row.avg_guesses),
           maxStreak: row.max_streak || 0,
         },
-        h2h: {yourWins: 0, theirWins: 0}, // Will be populated separately
+        h2h: {yourWins: 0, theirWins: 0},
       };
     });
   }
@@ -569,21 +810,28 @@ class SupabaseFriendsService implements IFriendsService {
    *
    * @param limit - Max number of users to return
    * @param onFreshData - Optional callback for when fresh data arrives
+   * @param userId - Optional user ID to avoid calling getSession (which can hang)
+   * @param accessToken - Optional access token for direct API calls (bypasses Supabase JS client)
    * @returns Cached data immediately if available, otherwise fetches from API
    */
   async getGlobalLeaderboard(
     limit = 20,
     onFreshData?: OnFreshData<Friend[]>,
+    userId?: string,
+    accessToken?: string,
   ): Promise<Friend[]> {
+    console.log('[FriendsService] getGlobalLeaderboard: Starting... userId:', !!userId, 'accessToken:', !!accessToken);
     // Check cache first
     const cached = getCache<Friend[]>(CACHE_KEYS.GLOBAL_LEADERBOARD);
     const isStale = isCacheStale(CACHE_KEYS.GLOBAL_LEADERBOARD);
+    console.log(`[FriendsService] getGlobalLeaderboard: Cache status - cached: ${cached !== null}, stale: ${isStale}`);
 
     // If we have cached data
     if (cached !== null) {
+      console.log(`[FriendsService] getGlobalLeaderboard: Returning cached data (${cached.length} users)`);
       // If stale, trigger background refresh
       if (isStale && onFreshData) {
-        this.fetchGlobalLeaderboardFromApi(limit)
+        this.fetchGlobalLeaderboardFromApi(limit, userId, accessToken)
           .then(freshData => {
             setCache(CACHE_KEYS.GLOBAL_LEADERBOARD, freshData);
             onFreshData(freshData);
@@ -597,12 +845,14 @@ class SupabaseFriendsService implements IFriendsService {
     }
 
     // No cache - fetch from API
+    console.log('[FriendsService] getGlobalLeaderboard: No cache, fetching from API...');
     try {
-      const leaderboard = await this.fetchGlobalLeaderboardFromApi(limit);
+      const leaderboard = await this.fetchGlobalLeaderboardFromApi(limit, userId, accessToken);
+      console.log(`[FriendsService] getGlobalLeaderboard: Fetched ${leaderboard.length} users, caching...`);
       setCache(CACHE_KEYS.GLOBAL_LEADERBOARD, leaderboard);
       return leaderboard;
     } catch (err) {
-      console.error('Failed to fetch global leaderboard:', err);
+      console.error('[FriendsService] getGlobalLeaderboard: Failed to fetch:', err);
       return [];
     }
   }

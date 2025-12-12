@@ -86,7 +86,21 @@ export default function SignInScreen({
     setLoading(true);
 
     try {
-      const result = await authService.signIn(email, password);
+      // Add 15 second timeout to prevent infinite hanging on network issues
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error('Sign in timed out. Please check your connection.'),
+            ),
+          15000,
+        ),
+      );
+
+      const result = await Promise.race([
+        authService.signIn(email, password),
+        timeoutPromise,
+      ]);
 
       if (result.error) {
         setError(result.error.message);
@@ -94,9 +108,9 @@ export default function SignInScreen({
         return;
       }
 
-      // Success - auth state change will update isAuthenticated
-      // via AuthContext, which triggers navigation automatically
+      // Success - navigate to game
       setLoading(false);
+      onSignInSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign in');
       setLoading(false);
@@ -425,4 +439,8 @@ const styles = StyleSheet.create({
     color: palette.accentTeal,
   },
 });
+
+
+
+
 

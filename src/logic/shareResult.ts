@@ -68,7 +68,7 @@ export function generateShareText(params: {
 export function getResultEmoji(guesses: number, maxRows: number, won: boolean): string {
   if (!won) return '😔';
 
-  const performance = guesses / maxRows;
+  const performance = maxRows > 0 ? guesses / maxRows : 1;
 
   if (guesses === 1) return '🤯'; // Hole in one!
   if (performance <= 0.33) return '🎉'; // Brilliant (1-2 out of 6)
@@ -84,7 +84,7 @@ export function getResultEmoji(guesses: number, maxRows: number, won: boolean): 
 export function getResultTitle(guesses: number, maxRows: number, won: boolean): string {
   if (!won) return 'Better Luck Next Time';
 
-  const performance = guesses / maxRows;
+  const performance = maxRows > 0 ? guesses / maxRows : 1;
 
   if (guesses === 1) return 'Incredible!';
   if (performance <= 0.33) return 'Brilliant!';

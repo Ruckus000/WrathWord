@@ -6,7 +6,8 @@
  */
 
 import {isDevelopment} from '../../config/environment';
-import {getSupabase} from '../supabase/client';
+import {getSupabase, getCachedSession} from '../supabase/client';
+import {directUpsert} from '../supabase/directRpc';
 import {
   UserProfile,
   LengthStats,
@@ -184,44 +185,38 @@ class SupabaseProfileService implements IProfileService {
   async syncStats(): Promise<void> {
     console.log('[ProfileService] syncStats called');
 
-    const supabase = getSupabase();
-    if (!supabase) {
-      console.warn('[ProfileService] No Supabase client - skipping sync');
+    // Use cached session (avoids getSession() which hangs)
+    const session = getCachedSession();
+    if (!session) {
+      console.warn('[ProfileService] No cached session - skipping sync');
       return;
     }
+    console.log('[ProfileService] Syncing stats for user:', session.user.id);
 
-    try {
-      // Use getSession() - cached locally, no network call
-      const {data: {session}} = await supabase.auth.getSession();
-      if (!session?.user) {
-        console.warn('[ProfileService] No session - skipping sync');
-        return;
+    const localProfile = getLocalProfile();
+
+    // Sync each word length
+    for (const length of [2, 3, 4, 5, 6]) {
+      const stats = localProfile.stats[length];
+      if (!stats) {
+        continue;
       }
-      const user = session.user;
-      console.log('[ProfileService] Syncing stats for user:', user.id);
 
-      const localProfile = getLocalProfile();
+      // Skip if no games played for this length
+      if (stats.gamesPlayed === 0) {
+        continue;
+      }
 
-      // Sync each word length
-      for (const length of [2, 3, 4, 5, 6]) {
-        const stats = localProfile.stats[length];
-        if (!stats) {
-          continue;
-        }
+      console.log(`[ProfileService] Upserting stats for length ${length}:`, {
+        gamesPlayed: stats.gamesPlayed,
+        gamesWon: stats.gamesWon,
+      });
 
-        // Skip if no games played for this length
-        if (stats.gamesPlayed === 0) {
-          continue;
-        }
-
-        console.log(`[ProfileService] Upserting stats for length ${length}:`, {
-          gamesPlayed: stats.gamesPlayed,
-          gamesWon: stats.gamesWon,
-        });
-
-        // Upsert stats to Supabase
-        const {error} = await supabase.from('game_stats').upsert({
-          user_id: user.id,
+      // Use directUpsert with timeout (avoids Supabase JS client pipeline)
+      const {error} = await directUpsert(
+        'game_stats',
+        {
+          user_id: session.user.id,
           word_length: length,
           games_played: stats.gamesPlayed,
           games_won: stats.gamesWon,
@@ -232,16 +227,16 @@ class SupabaseProfileService implements IProfileService {
           current_cycle: stats.currentCycle,
           last_played_date: stats.lastPlayedDate,
           updated_at: new Date().toISOString(),
-        });
+        },
+        session.accessToken,
+        'user_id,word_length',
+      );
 
-        if (error) {
-          console.error(`[ProfileService] Upsert failed for length ${length}:`, error.message);
-        } else {
-          console.log(`[ProfileService] Stats synced for length ${length}`);
-        }
+      if (error) {
+        console.error(`[ProfileService] Upsert failed for length ${length}:`, error.message);
+      } else {
+        console.log(`[ProfileService] Stats synced for length ${length}`);
       }
-    } catch (err) {
-      console.error('[ProfileService] syncStats error:', err);
     }
   }
 
@@ -264,6 +259,9 @@ export function getProfileService(): IProfileService {
 }
 
 export const profileService = getProfileService();
+
+
+
 
 
 

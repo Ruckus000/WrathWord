@@ -15,7 +15,7 @@ import React, {
 import {authService, AuthSession, AuthUser} from '../services/auth';
 import {isDevelopment} from '../config/environment';
 import {setCurrentUserId} from '../storage/userScope';
-import {friendsService} from '../services/data';
+import {friendsService, getProfileService} from '../services/data';
 
 // Stable user ID for development mode
 const DEV_MODE_USER_ID = 'dev-user';
@@ -23,6 +23,7 @@ const DEV_MODE_USER_ID = 'dev-user';
 interface AuthContextValue {
   session: AuthSession | null;
   user: AuthUser | null;
+  accessToken: string | null;
   loading: boolean;
   isAuthenticated: boolean;
   isDevelopmentMode: boolean;
@@ -58,8 +59,15 @@ export function AuthProvider({children}: AuthProviderProps) {
 
       // Pre-fetch friends data in background (fire-and-forget)
       // This populates the cache so FriendsScreen loads instantly
-      friendsService.getFriends().catch(err => {
+      // Pass userId and accessToken for direct API calls (bypasses Supabase JS client)
+      friendsService.getFriends(undefined, session.user.id, session.accessToken ?? undefined).catch(err => {
         console.log('Background friends pre-fetch failed:', err);
+      });
+
+      // Sync local stats to DB on login (fire-and-forget)
+      // This pushes any existing local game data to the cloud
+      getProfileService().syncStats().catch(err => {
+        console.log('[AuthContext] Background stats sync failed:', err);
       });
     } else {
       // No user signed in - clear user ID
@@ -120,6 +128,7 @@ export function AuthProvider({children}: AuthProviderProps) {
   const value: AuthContextValue = {
     session,
     user: session?.user || null,
+    accessToken: session?.accessToken || null,
     loading,
     isAuthenticated: session !== null,
     isDevelopmentMode: isDevelopment,
@@ -128,6 +137,9 @@ export function AuthProvider({children}: AuthProviderProps) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
+
+
+
 
 
 

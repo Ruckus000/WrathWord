@@ -18,12 +18,15 @@ type Props = {
   waitingCount: number;
   topFriends: FriendAvatar[];
   onPress: () => void;
+  loading?: boolean;
 };
 
 function getOrdinal(n: number): string {
+  if (n <= 0 || isNaN(n)) return '0th';
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  if (v >= 11 && v <= 13) return n + 'th';
+  return n + (s[v % 10] || 'th');
 }
 
 function Avatar({friend}: {friend: FriendAvatar}) {
@@ -53,7 +56,10 @@ export default function CompeteCard({
   waitingCount,
   topFriends,
   onPress,
+  loading = false,
 }: Props) {
+  const isEmpty = !loading && topFriends.length === 0 && totalPlayed === 0;
+
   return (
     <Pressable
       style={({pressed}) => [styles.card, pressed && styles.cardPressed]}
@@ -67,37 +73,64 @@ export default function CompeteCard({
         <ChevronRight size={16} color={palette.textDim} />
       </View>
 
-      {/* Content */}
-      <View style={styles.content}>
-        <View style={styles.status}>
-          <Text style={styles.rankText}>
-            You're{' '}
-            <Text style={styles.rankHighlight}>{getOrdinal(userRank)}</Text> of{' '}
-            {totalPlayed} today
-          </Text>
-          {waitingCount > 0 && (
-            <Text style={styles.waitingText}>
-              {waitingCount} friend{waitingCount !== 1 ? 's' : ''} still playing
-            </Text>
-          )}
+      {/* Loading State */}
+      {loading && (
+        <View style={styles.content}>
+          <View style={styles.status}>
+            <View style={styles.loadingBar} />
+            <View style={[styles.loadingBar, styles.loadingBarShort]} />
+          </View>
+          <View style={styles.avatars}>
+            <View style={[styles.avatarWrap, styles.avatarFirst, styles.loadingAvatar]} />
+            <View style={[styles.avatarWrap, styles.loadingAvatar]} />
+            <View style={[styles.avatarWrap, styles.loadingAvatar]} />
+          </View>
         </View>
+      )}
 
-        {/* Friend Avatars */}
-        <View style={styles.avatars}>
-          {topFriends.slice(0, 3).map((friend, idx) => (
-            <View
-              key={friend.id}
-              style={[styles.avatarWrap, idx === 0 && styles.avatarFirst]}>
-              <Avatar friend={friend} />
-            </View>
-          ))}
-          {waitingCount > 0 && (
-            <View style={[styles.avatarWrap, styles.avatarWaiting]}>
-              <Text style={styles.avatarWaitingText}>+{waitingCount}</Text>
-            </View>
-          )}
+      {/* Empty State - No Friends */}
+      {isEmpty && (
+        <View style={styles.content}>
+          <View style={styles.status}>
+            <Text style={styles.emptyText}>Add friends to compete!</Text>
+            <Text style={styles.waitingText}>See how you rank against others</Text>
+          </View>
         </View>
-      </View>
+      )}
+
+      {/* Normal Content */}
+      {!loading && !isEmpty && (
+        <View style={styles.content}>
+          <View style={styles.status}>
+            <Text style={styles.rankText}>
+              You're{' '}
+              <Text style={styles.rankHighlight}>{getOrdinal(userRank)}</Text> of{' '}
+              {totalPlayed} today
+            </Text>
+            {waitingCount > 0 && (
+              <Text style={styles.waitingText}>
+                {waitingCount} friend{waitingCount !== 1 ? 's' : ''} still playing
+              </Text>
+            )}
+          </View>
+
+          {/* Friend Avatars */}
+          <View style={styles.avatars}>
+            {topFriends.slice(0, 3).map((friend, idx) => (
+              <View
+                key={friend.id}
+                style={[styles.avatarWrap, idx === 0 && styles.avatarFirst]}>
+                <Avatar friend={friend} />
+              </View>
+            ))}
+            {waitingCount > 0 && (
+              <View style={[styles.avatarWrap, styles.avatarWaiting]}>
+                <Text style={styles.avatarWaitingText}>+{waitingCount}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -192,5 +225,30 @@ const styles = StyleSheet.create({
   avatarWaitingText: {
     fontSize: 12,
     color: palette.textDim,
+  },
+  // Loading state styles
+  loadingBar: {
+    height: 14,
+    width: 140,
+    backgroundColor: palette.card,
+    borderRadius: 4,
+  },
+  loadingBarShort: {
+    width: 100,
+    marginTop: 6,
+  },
+  loadingAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: palette.card,
+    borderWidth: 2,
+    borderColor: palette.bg,
+  },
+  // Empty state styles
+  emptyText: {
+    fontSize: 14,
+    color: palette.textPrimary,
+    fontWeight: '600',
   },
 });

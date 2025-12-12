@@ -5,7 +5,7 @@
  * Used in production mode when Supabase is configured.
  */
 
-import {getSupabase} from '../supabase/client';
+import {getSupabase, setCachedSession} from '../supabase/client';
 import {
   IAuthService,
   AuthUser,
@@ -77,6 +77,12 @@ class SupabaseAuthService implements IAuthService {
         accessToken: authData.session.access_token,
         refreshToken: authData.session.refresh_token,
       };
+
+      // Cache session for sync access by other services
+      setCachedSession({
+        user: {id: authData.user.id},
+        access_token: authData.session.access_token,
+      });
 
       // Notify all registered listeners (like mockAuthService does)
       this.authStateCallbacks.forEach(cb => cb(session));
@@ -150,6 +156,14 @@ class SupabaseAuthService implements IAuthService {
         refreshToken: authData.session?.refresh_token,
       };
 
+      // Cache session for sync access by other services
+      if (authData.session?.access_token) {
+        setCachedSession({
+          user: {id: authData.user.id},
+          access_token: authData.session.access_token,
+        });
+      }
+
       // Notify all registered listeners (like mockAuthService does)
       console.log(
         '[Auth] signIn success, notifying',
@@ -182,6 +196,9 @@ class SupabaseAuthService implements IAuthService {
       if (error) {
         return {data: null, error: {message: error.message}};
       }
+
+      // Clear cached session
+      setCachedSession(null);
 
       // Notify all registered listeners (like mockAuthService does)
       this.authStateCallbacks.forEach(cb => cb(null));
@@ -302,6 +319,17 @@ class SupabaseAuthService implements IAuthService {
       data: {subscription},
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[Auth] NATIVE onAuthStateChange fired:', event, !!session);
+
+      // Cache session for sync access by other services (handles TOKEN_REFRESHED too)
+      setCachedSession(
+        session
+          ? {
+              user: {id: session.user.id},
+              access_token: session.access_token,
+            }
+          : null,
+      );
+
       if (!session) {
         callback(null);
         return;
@@ -388,6 +416,9 @@ class SupabaseAuthService implements IAuthService {
 }
 
 export const supabaseAuthService = new SupabaseAuthService();
+
+
+
 
 
 

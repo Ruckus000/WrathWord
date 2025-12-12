@@ -30,39 +30,42 @@ export default function HeadToHeadModal({visible, friend, onClose}: Props) {
   // Get user's display letter
   const userLetter = (user?.displayName ?? user?.username ?? 'Y')[0].toUpperCase();
 
+  // Helper to safely format numbers
+  const safeNum = (v: number): number => (isNaN(v) || v === null || v === undefined ? 0 : v);
+
   const stats: StatRow[] = [
     {
       label: 'Win Rate',
-      you: userStats.winRate,
-      them: friend.stats.winRate,
+      you: safeNum(userStats.winRate),
+      them: safeNum(friend.stats.winRate),
       format: (v: number) => `${v}%`,
       lowerIsBetter: false,
     },
     {
       label: 'Avg. Guesses',
-      you: userStats.avgGuesses,
-      them: friend.stats.avgGuesses,
+      you: safeNum(userStats.avgGuesses),
+      them: safeNum(friend.stats.avgGuesses),
       format: (v: number) => v.toFixed(1),
       lowerIsBetter: true,
     },
     {
       label: 'Current Streak',
-      you: userStats.currentStreak,
-      them: friend.streak,
+      you: safeNum(userStats.currentStreak),
+      them: safeNum(friend.streak),
       format: (v: number) => String(v),
       lowerIsBetter: false,
     },
     {
       label: 'Best Streak',
-      you: userStats.maxStreak,
-      them: friend.stats.maxStreak,
+      you: safeNum(userStats.maxStreak),
+      them: safeNum(friend.stats.maxStreak),
       format: (v: number) => String(v),
       lowerIsBetter: false,
     },
     {
       label: 'Games Played',
-      you: userStats.played,
-      them: friend.stats.played,
+      you: safeNum(userStats.played),
+      them: safeNum(friend.stats.played),
       format: (v: number) => String(v),
       lowerIsBetter: false,
     },

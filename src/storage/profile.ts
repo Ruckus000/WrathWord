@@ -219,11 +219,13 @@ export function getTotalStats(): {
   winRate: number;
   currentStreak: number;
   maxStreak: number;
+  guessDistribution: {[guesses: number]: number};
 } {
   const profile = getProfile();
   let played = 0;
   let won = 0;
   let maxStreak = 0;
+  const guessDistribution: {[guesses: number]: number} = {};
 
   // Aggregate across all lengths
   Object.values(profile.stats).forEach(stats => {
@@ -232,6 +234,11 @@ export function getTotalStats(): {
     if (stats.maxStreak > maxStreak) {
       maxStreak = stats.maxStreak;
     }
+    // Aggregate guess distribution
+    Object.entries(stats.guessDistribution || {}).forEach(([guesses, count]) => {
+      const guessNum = parseInt(guesses, 10);
+      guessDistribution[guessNum] = (guessDistribution[guessNum] || 0) + count;
+    });
   });
 
   // Current streak is from the most recently played length
@@ -252,7 +259,7 @@ export function getTotalStats(): {
 
   const winRate = played > 0 ? Math.round((won / played) * 100) : 0;
 
-  return {played, won, winRate, currentStreak, maxStreak};
+  return {played, won, winRate, currentStreak, maxStreak, guessDistribution};
 }
 
 // Reset stats (for testing or user request)

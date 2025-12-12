@@ -65,13 +65,21 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
         setCompetitionData(data);
       } catch (err) {
         console.error('Failed to load competition data:', err);
+        // Set empty fallback data so CompeteCard still renders
+        setCompetitionData({
+          userRank: 0,
+          totalPlayed: 0,
+          waitingCount: 0,
+          topFriends: [],
+          userPlayedToday: false,
+        });
       }
     };
 
     loadCompetitionData();
 
-    // Refresh periodically to catch updates
-    const interval = setInterval(loadCompetitionData, 5000);
+    // Refresh periodically to catch updates (30 seconds to reduce battery drain)
+    const interval = setInterval(loadCompetitionData, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -183,12 +191,12 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
         </View>
 
         {/* Compete Card */}
-        {onNavigateToFriends && competitionData && (
+        {onNavigateToFriends && (
           <CompeteCard
-            userRank={competitionData.userRank}
-            totalPlayed={competitionData.totalPlayed}
-            waitingCount={competitionData.waitingCount}
-            topFriends={competitionData.topFriends.map(f => ({
+            userRank={competitionData?.userRank ?? 0}
+            totalPlayed={competitionData?.totalPlayed ?? 0}
+            waitingCount={competitionData?.waitingCount ?? 0}
+            topFriends={(competitionData?.topFriends ?? []).map(f => ({
               ...f,
               // Update user letter with actual user data
               letter: f.isYou
@@ -196,6 +204,7 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
                 : f.letter,
             }))}
             onPress={onNavigateToFriends}
+            loading={competitionData === null}
           />
         )}
 
