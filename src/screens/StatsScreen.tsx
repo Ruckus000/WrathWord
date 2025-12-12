@@ -1,5 +1,5 @@
 // src/screens/StatsScreen.tsx
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   Alert,
   Modal,
+  Vibration,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {
@@ -106,15 +107,19 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
     1,
   );
 
-  const handleHapticsChange = (value: boolean) => {
+  const handleHapticsChange = useCallback((value: boolean) => {
     setHaptics(value);
     updatePreferences({hapticsEnabled: value});
-  };
+    // Confirmation haptic when enabling - gives immediate feedback that it works
+    if (value) {
+      Vibration.vibrate();
+    }
+  }, []);
 
-  const handleHighContrastChange = (value: boolean) => {
+  const handleHighContrastChange = useCallback((value: boolean) => {
     setHighContrast(value);
     updatePreferences({highContrastEnabled: value});
-  };
+  }, []);
 
   const handleResetStats = () => {
     Alert.alert(

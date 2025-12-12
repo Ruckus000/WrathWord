@@ -89,6 +89,8 @@ export default function GameScreen({onNavigateToStats}: Props) {
   const [playAgainIsFreeMode, setPlayAgainIsFreeMode] = useState(false);
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
+  // Track tile colors for reactivity when preferences change
+  const [tileColors, setTileColors] = useState(getTileColors());
 
   // Load wordlists per length (4-6 only)
   const LISTS: Record<number, {answers: string[]; allowed: string[]}> = {
@@ -241,6 +243,13 @@ export default function GameScreen({onNavigateToStats}: Props) {
       setPlayAgainIsFreeMode(mode === 'daily');
     }
   }, [status, mode]);
+
+  // Refresh tile colors when component re-renders (e.g., returning from Settings)
+  // This ensures High Contrast changes take effect immediately
+  useEffect(() => {
+    const newColors = getTileColors();
+    setTileColors(newColors);
+  });
 
   const showError = useCallback((msg: string) => {
     setErrorMsg(msg);
@@ -437,11 +446,12 @@ export default function GameScreen({onNavigateToStats}: Props) {
           feedback={feedback}
           current={current}
           maxRows={maxRows}
+          tileColors={tileColors}
         />
       </Animated.View>
 
       {/* Keyboard */}
-      <Keyboard onKey={onKey} keyStates={keyStates} />
+      <Keyboard onKey={onKey} keyStates={keyStates} tileColors={tileColors} />
 
       {/* Settings sheet */}
       <NewGameModal
@@ -497,7 +507,6 @@ export default function GameScreen({onNavigateToStats}: Props) {
                 {feedback.map((row, rIdx) => (
                   <View key={rIdx} style={styles.guessRow}>
                     {row.map((state, cIdx) => {
-                      const tileColors = getTileColors();
                       const tileColor =
                         state === 'correct'
                           ? tileColors.correct
@@ -594,12 +603,14 @@ const Board = React.memo(
     feedback,
     current,
     maxRows,
+    tileColors,
   }: {
     length: number;
     rows: string[];
     feedback: TileState[][];
     current: string;
     maxRows: number;
+    tileColors: ReturnType<typeof getTileColors>;
   }) => {
     const {width} = useWindowDimensions();
     const gap = 8;
@@ -631,6 +642,7 @@ const Board = React.memo(
                   state={state as any}
                   isActive={isActive}
                   size={tileSize}
+                  tileColors={tileColors}
                 />
               );
             })}
@@ -647,15 +659,16 @@ const Tile = React.memo(
     state,
     isActive,
     size,
+    tileColors,
   }: {
     ch: string;
     state: TileState | 'empty';
     isActive?: boolean;
     size?: {width: number; height: number};
+    tileColors: ReturnType<typeof getTileColors>;
   }) => {
     const fontSize = size ? Math.floor(size.width * 0.54) : 28;
     const flipAnim = useRef(new Animated.Value(0)).current;
-    const tileColors = getTileColors();
 
     useEffect(() => {
       if (state !== 'empty') {
@@ -715,9 +728,11 @@ const Keyboard = React.memo(
   ({
     onKey,
     keyStates,
+    tileColors,
   }: {
     onKey: (k: string) => void;
     keyStates: Map<string, TileState>;
+    tileColors: ReturnType<typeof getTileColors>;
   }) => {
     return (
       <View style={styles.kb}>
@@ -736,6 +751,7 @@ const Keyboard = React.memo(
                   state={st}
                   disabled={disabled}
                   onPress={() => onKey(k)}
+                  tileColors={tileColors}
                 />
               );
             })}
@@ -758,6 +774,7 @@ const Key = React.memo(
     isAction,
     accessibilityLabel,
     disabled,
+    tileColors,
   }: {
     label: string;
     onPress: () => void;
@@ -766,17 +783,16 @@ const Key = React.memo(
     isAction?: boolean;
     accessibilityLabel?: string;
     disabled?: boolean;
+    tileColors?: ReturnType<typeof getTileColors>;
   }) => {
-    const keyColors = getTileColors();
-
     // Dynamic color styles based on high contrast preference
     const stateStyle =
-      state === 'correct'
-        ? {backgroundColor: keyColors.correct}
-        : state === 'present'
-        ? {backgroundColor: keyColors.present}
-        : state === 'absent'
-        ? {backgroundColor: keyColors.absent}
+      state === 'correct' && tileColors
+        ? {backgroundColor: tileColors.correct}
+        : state === 'present' && tileColors
+        ? {backgroundColor: tileColors.present}
+        : state === 'absent' && tileColors
+        ? {backgroundColor: tileColors.absent}
         : null;
 
     return (
@@ -1086,15 +1102,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 4,
-  },
-  tileCorrectSmall: {
-    backgroundColor: '#30d158',
-  },
-  tilePresentSmall: {
-    backgroundColor: '#ffcc00',
-  },
-  tileAbsentSmall: {
-    backgroundColor: '#48484a',
   },
   streakSection: {
     flexDirection: 'row',
