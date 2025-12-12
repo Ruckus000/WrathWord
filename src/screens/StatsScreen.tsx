@@ -18,10 +18,13 @@ import {
   updatePreferences,
 } from '../storage/profile';
 import {VALID_LENGTHS} from '../config/gameConfig';
+import {APP_CONFIG} from '../config/appConfig';
 import {profileService, competitionService, CompetitionData} from '../services/data';
 import {useAuth} from '../contexts/AuthContext';
 import {palette} from '../theme/colors';
 import {Toggle} from '../components/Toggle';
+import {triggerImpact} from '../utils/haptics';
+import {openFeedbackEmail} from '../utils/feedback';
 import {
   ChevronLeft,
   ChevronRight,
@@ -35,6 +38,7 @@ import {
 } from '../components/icons/SettingsIcons';
 import CompeteCard from '../components/CompeteCard';
 import ProfileScreen from './ProfileScreen';
+import LegalDocumentScreen from './LegalDocumentScreen';
 
 type Props = {
   onBack: () => void;
@@ -56,6 +60,8 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
     profile.preferences.highContrastEnabled ?? false,
   );
   const [showProfile, setShowProfile] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const [competitionData, setCompetitionData] = useState<CompetitionData | null>(null);
 
   // Load competition data on mount
@@ -323,19 +329,29 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
             icon={<DocumentIcon size={18} />}
             iconBg={palette.textDim}
             label="Terms of Service"
-            onPress={() => {}}
+            onPress={() => {
+              triggerImpact('Light');
+              setShowTerms(true);
+            }}
           />
           <SettingsRow
             icon={<ShieldIcon size={18} />}
             iconBg={palette.textDim}
             label="Privacy Policy"
-            onPress={() => {}}
+            onPress={() => {
+              triggerImpact('Light');
+              setShowPrivacy(true);
+            }}
           />
           <SettingsRow
             icon={<ChatIcon size={18} />}
             iconBg={palette.textDim}
             label="Send Feedback"
-            onPress={() => {}}
+            subtitle="Opens email"
+            onPress={() => {
+              triggerImpact('Light');
+              openFeedbackEmail(user?.id);
+            }}
             isLast
           />
         </View>
@@ -353,7 +369,7 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
         </View>
 
         <Text style={styles.versionFooter}>
-          WrathWord v1.0.0 {isDevelopmentMode ? '• DEV MODE' : ''}
+          {APP_CONFIG.name} v{APP_CONFIG.version} {isDevelopmentMode ? '• DEV MODE' : ''}
         </Text>
       </ScrollView>
 
@@ -364,6 +380,30 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowProfile(false)}>
         <ProfileScreen onClose={() => setShowProfile(false)} />
+      </Modal>
+
+      {/* Terms of Service Modal */}
+      <Modal
+        visible={showTerms}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowTerms(false)}>
+        <LegalDocumentScreen
+          documentType="terms"
+          onClose={() => setShowTerms(false)}
+        />
+      </Modal>
+
+      {/* Privacy Policy Modal */}
+      <Modal
+        visible={showPrivacy}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowPrivacy(false)}>
+        <LegalDocumentScreen
+          documentType="privacy"
+          onClose={() => setShowPrivacy(false)}
+        />
       </Modal>
     </View>
   );

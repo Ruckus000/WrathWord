@@ -1,6 +1,6 @@
 {
   "name": "WrathWord",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
@@ -9,7 +9,12 @@
     "test": "jest",
     "lint": "eslint .",
     "bundle:ios": "react-native bundle --platform ios --dev false --entry-file index.js --bundle-output ios/main.jsbundle --assets-dest ios",
-    "postinstall": "patch-package"
+    "sync-version": "node scripts/sync-version.js",
+    "bump:patch": "node scripts/bump-version.js patch",
+    "bump:minor": "node scripts/bump-version.js minor",
+    "bump:major": "node scripts/bump-version.js major",
+    "prebuild": "npm run sync-version",
+    "postinstall": "patch-package && npm run sync-version"
   },
   "dependencies": {
     "@react-native-clipboard/clipboard": "^1.16.3",
