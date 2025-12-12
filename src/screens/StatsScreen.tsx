@@ -17,6 +17,7 @@ import {
   resetStats,
   updatePreferences,
 } from '../storage/profile';
+import {VALID_LENGTHS} from '../config/gameConfig';
 import {profileService, competitionService, CompetitionData} from '../services/data';
 import {useAuth} from '../contexts/AuthContext';
 import {palette} from '../theme/colors';
@@ -212,7 +213,7 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionHeaderTitle}>Guess Distribution</Text>
           <View style={styles.lengthPicker}>
-            {[2, 3, 4, 5, 6].map(n => (
+            {VALID_LENGTHS.map(n => (
               <Pressable
                 key={n}
                 style={[

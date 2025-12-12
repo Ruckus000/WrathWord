@@ -1,19 +1,14 @@
-import answers2 from '../words/answers-2';
-import allowed2 from '../words/allowed-2';
-import answers3 from '../words/answers-3';
-import allowed3 from '../words/allowed-3';
 import answers4 from '../words/answers-4';
 import allowed4 from '../words/allowed-4';
 import answers5 from '../words/answers-5';
 import allowed5 from '../words/allowed-5';
 import answers6 from '../words/answers-6';
 import allowed6 from '../words/allowed-6';
+import {VALID_LENGTHS} from '../../config/gameConfig';
 
 describe('Word Lists Comprehensive Validation', () => {
-  const lengths = [2, 3, 4, 5, 6];
-  const wordLists = {
-    2: {answers: answers2, allowed: allowed2},
-    3: {answers: answers3, allowed: allowed3},
+  const lengths = [...VALID_LENGTHS];
+  const wordLists: Record<number, {answers: string[]; allowed: string[]}> = {
     4: {answers: answers4, allowed: allowed4},
     5: {answers: answers5, allowed: allowed5},
     6: {answers: answers6, allowed: allowed6},
@@ -170,7 +165,7 @@ describe('Word Lists Comprehensive Validation', () => {
       const {answers} = wordLists[len];
 
       it(`length ${len}: should have mostly varied letters`, () => {
-        // Most words should have varied letters (allowing some exceptions like "aa")
+        // Most words should have varied letters
         let singleLetterWords = 0;
         answers.forEach(word => {
           const uniqueChars = new Set(word);
@@ -178,8 +173,8 @@ describe('Word Lists Comprehensive Validation', () => {
             singleLetterWords++;
           }
         });
-        // Less than 2% should be single-letter repetitions (higher for 2-letter words)
-        const threshold = len === 2 ? 0.02 : 0.01;
+        // Less than 1% should be single-letter repetitions
+        const threshold = 0.01;
         expect(singleLetterWords / answers.length).toBeLessThan(threshold);
       });
 
@@ -232,9 +227,9 @@ describe('Word Lists Comprehensive Validation', () => {
       expect(found / commonWords.length).toBeGreaterThanOrEqual(0.8);
     });
 
-    it('length 3: should contain basic words', () => {
-      const basicWords = ['cat', 'dog', 'run', 'sit', 'big'];
-      const answersSet = new Set(answers3);
+    it('length 4: should contain basic words', () => {
+      const basicWords = ['that', 'with', 'have', 'this', 'will'];
+      const answersSet = new Set(answers4);
 
       let found = 0;
       basicWords.forEach(word => {

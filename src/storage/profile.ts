@@ -1,6 +1,7 @@
 // src/storage/profile.ts
 import {getJSON, setJSON, kv} from './mmkv';
 import {getScopedKey, getCurrentUserId} from './userScope';
+import {VALID_LENGTHS} from '../config/gameConfig';
 
 export type UserProfile = {
   id: string;
@@ -10,7 +11,7 @@ export type UserProfile = {
 };
 
 export type GameStats = {
-  // Stats per word length (2-6)
+  // Stats per word length (4-6)
   [length: number]: LengthStats;
 };
 
@@ -65,16 +66,14 @@ function initLengthStats(): LengthStats {
 
 // Create default profile (used when no user is logged in or for new users)
 function createDefaultProfile(): UserProfile {
+  const stats: GameStats = {};
+  for (const len of VALID_LENGTHS) {
+    stats[len] = initLengthStats();
+  }
   return {
     id: generateUUID(),
     createdAt: Date.now(),
-    stats: {
-      2: initLengthStats(),
-      3: initLengthStats(),
-      4: initLengthStats(),
-      5: initLengthStats(),
-      6: initLengthStats(),
-    },
+    stats,
     preferences: {
       defaultLength: 5,
       defaultRows: 6,
@@ -227,35 +226,39 @@ export function getTotalStats(): {
   let maxStreak = 0;
   const guessDistribution: {[guesses: number]: number} = {};
 
-  // Aggregate across all lengths
-  Object.values(profile.stats).forEach(stats => {
-    played += stats.gamesPlayed;
-    won += stats.gamesWon;
-    if (stats.maxStreak > maxStreak) {
-      maxStreak = stats.maxStreak;
-    }
-    // Aggregate guess distribution
-    Object.entries(stats.guessDistribution || {}).forEach(([guesses, count]) => {
-      const guessNum = parseInt(guesses, 10);
-      guessDistribution[guessNum] = (guessDistribution[guessNum] || 0) + count;
+  // Aggregate across valid lengths only (4-6)
+  Object.entries(profile.stats)
+    .filter(([len]) => VALID_LENGTHS.includes(Number(len) as 4 | 5 | 6))
+    .forEach(([, stats]) => {
+      played += stats.gamesPlayed;
+      won += stats.gamesWon;
+      if (stats.maxStreak > maxStreak) {
+        maxStreak = stats.maxStreak;
+      }
+      // Aggregate guess distribution
+      Object.entries(stats.guessDistribution || {}).forEach(([guesses, count]) => {
+        const guessNum = parseInt(guesses, 10);
+        guessDistribution[guessNum] = (guessDistribution[guessNum] || 0) + count;
+      });
     });
-  });
 
-  // Current streak is from the most recently played length
+  // Current streak is from the most recently played valid length
   let currentStreak = 0;
   let mostRecentDate: string | null = null;
 
-  Object.values(profile.stats).forEach(stats => {
-    if (stats.lastPlayedDate) {
-      if (
-        !mostRecentDate ||
-        new Date(stats.lastPlayedDate) > new Date(mostRecentDate)
-      ) {
-        mostRecentDate = stats.lastPlayedDate;
-        currentStreak = stats.currentStreak;
+  Object.entries(profile.stats)
+    .filter(([len]) => VALID_LENGTHS.includes(Number(len) as 4 | 5 | 6))
+    .forEach(([, stats]) => {
+      if (stats.lastPlayedDate) {
+        if (
+          !mostRecentDate ||
+          new Date(stats.lastPlayedDate) > new Date(mostRecentDate)
+        ) {
+          mostRecentDate = stats.lastPlayedDate;
+          currentStreak = stats.currentStreak;
+        }
       }
-    }
-  });
+    });
 
   const winRate = played > 0 ? Math.round((won / played) * 100) : 0;
 
@@ -265,13 +268,11 @@ export function getTotalStats(): {
 // Reset stats (for testing or user request)
 export function resetStats(): void {
   const profile = getProfile();
-  profile.stats = {
-    2: initLengthStats(),
-    3: initLengthStats(),
-    4: initLengthStats(),
-    5: initLengthStats(),
-    6: initLengthStats(),
-  };
+  const stats: GameStats = {};
+  for (const len of VALID_LENGTHS) {
+    stats[len] = initLengthStats();
+  }
+  profile.stats = stats;
   saveProfile(profile);
 }
 

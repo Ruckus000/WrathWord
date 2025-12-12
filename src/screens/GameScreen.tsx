@@ -1,16 +1,13 @@
 // src/screens/GameScreen.tsx
 import React, {useCallback, useEffect, useMemo, useState, useRef} from 'react';
-// Statically import all word lists so Metro/Expo + Hermes can bundle without `require`
-import answers2 from '../logic/words/answers-2';
-import allowed2 from '../logic/words/allowed-2';
-import answers3 from '../logic/words/answers-3';
-import allowed3 from '../logic/words/allowed-3';
+// Statically import word lists for lengths 4-6 (Metro/Expo + Hermes compatible)
 import answers4 from '../logic/words/answers-4';
 import allowed4 from '../logic/words/allowed-4';
 import answers5 from '../logic/words/answers-5';
 import allowed5 from '../logic/words/allowed-5';
 import answers6 from '../logic/words/answers-6';
 import allowed6 from '../logic/words/allowed-6';
+import {VALID_LENGTHS, DEFAULT_LENGTH, isValidLength} from '../config/gameConfig';
 import {
   View,
   Text,
@@ -36,6 +33,11 @@ import {
   markWordAsUsed,
   getUnusedWords,
 } from '../storage/profile';
+import {
+  isDailyCompleted,
+  markDailyCompleted,
+  isDailyCompletedFromGameState,
+} from '../storage/dailyCompletion';
 
 import {gameResultsService} from '../services/data';
 import {
@@ -84,19 +86,18 @@ export default function GameScreen({onNavigateToStats}: Props) {
   const firstLaunchRef = useRef(getJSON('app.hasLaunched', false) === false);
   const [showSettings, setShowSettings] = useState(firstLaunchRef.current);
   const [errorMsg, setErrorMsg] = useState<string>('');
+  const [playAgainIsFreeMode, setPlayAgainIsFreeMode] = useState(false);
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
 
-  // Load wordlists per length (static require map to satisfy Metro)
+  // Load wordlists per length (4-6 only)
   const LISTS: Record<number, {answers: string[]; allowed: string[]}> = {
-    2: {answers: answers2 as string[], allowed: allowed2 as string[]},
-    3: {answers: answers3 as string[], allowed: allowed3 as string[]},
     4: {answers: answers4 as string[], allowed: allowed4 as string[]},
     5: {answers: answers5 as string[], allowed: allowed5 as string[]},
     6: {answers: answers6 as string[], allowed: allowed6 as string[]},
   };
   const getLists = useCallback((len: number): {answers: string[]; allowed: string[]} => {
-    return LISTS[len] ?? LISTS[5];
+    return LISTS[len] ?? LISTS[DEFAULT_LENGTH];
   }, []);
 
   // Keep the same Promise-based API used elsewhere
@@ -107,11 +108,20 @@ export default function GameScreen({onNavigateToStats}: Props) {
       // Use explicit parameters if provided, otherwise fall back to state
       const effectiveLength = explicitLength ?? length;
       const effectiveMaxRows = explicitMaxRows ?? maxRows;
-      const effectiveMode: Mode = explicitMode ?? mode;
+      let effectiveMode: Mode = explicitMode ?? mode;
+      const targetDateISO = seedDate ?? new Date().toISOString().slice(0, 10);
+
+      // DAILY REPLAY PREVENTION: Check if daily is already completed
+      if (effectiveMode === 'daily') {
+        const alreadyCompleted = isDailyCompleted(effectiveLength, effectiveMaxRows, targetDateISO);
+        if (alreadyCompleted) {
+          effectiveMode = 'free';
+          setMode('free');
+        }
+      }
 
       // Fetch the word lists for the effective length
       const {answers} = getLists(effectiveLength);
-      const dateISO = seedDate ?? new Date().toISOString().slice(0, 10);
 
       // Get unused words for this length
       const unusedWords = getUnusedWords(effectiveLength, answers);
@@ -119,19 +129,20 @@ export default function GameScreen({onNavigateToStats}: Props) {
       // If all words have been used, use the full list (cycle resets automatically)
       const availableWords = unusedWords.length > 0 ? unusedWords : answers;
 
+      // Select the next word based on mode
       const next =
         effectiveMode === 'daily'
-          ? selectDaily(effectiveLength, effectiveMaxRows, dateISO, availableWords)
+          ? selectDaily(effectiveLength, effectiveMaxRows, targetDateISO, availableWords)
           : availableWords[Math.floor(Math.random() * availableWords.length)];
 
       setAnswer(next);
-      setDateISO(dateISO);
+      setDateISO(targetDateISO);
       setRows([]);
       setFeedback([]);
       setCurrent('');
       setStatus('playing');
       setShowResult(false);
-      setJSON('session', {length: effectiveLength, maxRows: effectiveMaxRows, mode: effectiveMode, dateISO, answerHash: next}); // store hash in a real app
+      setJSON('session', {length: effectiveLength, maxRows: effectiveMaxRows, mode: effectiveMode, dateISO: targetDateISO, answerHash: next});
     },
     [getLists, length, maxRows, mode],
   );
@@ -164,6 +175,19 @@ export default function GameScreen({onNavigateToStats}: Props) {
   // - if first launch -> leave the New Game sheet open
   useEffect(() => {
     const init = async () => {
+      // MIGRATION: Handle invalid length settings from removed 2/3-letter modes
+      const savedLength = getJSON<number>('settings.length', DEFAULT_LENGTH);
+      if (!isValidLength(savedLength)) {
+        setJSON('settings.length', DEFAULT_LENGTH);
+        setLength(DEFAULT_LENGTH);
+      }
+
+      // Clear any in-progress game with invalid length
+      const savedGame = getJSON<{length?: number}>(getGameStateKey(), null as unknown as {length?: number});
+      if (savedGame && savedGame.length && !isValidLength(savedGame.length)) {
+        setJSON(getGameStateKey(), null);
+      }
+
       if (firstLaunchRef.current) {
         // Enforce defaults for the initial experience
         setLength(5);
@@ -210,6 +234,13 @@ export default function GameScreen({onNavigateToStats}: Props) {
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Update playAgainIsFreeMode when game ends (for dynamic button text)
+  useEffect(() => {
+    if (status === 'won' || status === 'lost') {
+      setPlayAgainIsFreeMode(mode === 'daily');
+    }
+  }, [status, mode]);
 
   const showError = useCallback((msg: string) => {
     setErrorMsg(msg);
@@ -269,10 +300,9 @@ export default function GameScreen({onNavigateToStats}: Props) {
       // Mark word as used after successful completion
       const lists = await listsPromise;
       markWordAsUsed(length, answer, lists.answers.length);
-      // If today's daily was completed, mark completion flag so onboarding cancel can respect it
+      // Mark daily completion for replay prevention
       if (mode === 'daily') {
-        const key = `daily.${length}x${maxRows}.${dateISO}.completed`;
-        setJSON(key, true);
+        markDailyCompleted(length, maxRows, dateISO);
       }
     } else if (rows.length + 1 >= maxRows) {
       setStatus('lost');
@@ -296,8 +326,7 @@ export default function GameScreen({onNavigateToStats}: Props) {
       const lists = await listsPromise;
       markWordAsUsed(length, answer, lists.answers.length);
       if (mode === 'daily') {
-        const key = `daily.${length}x${maxRows}.${dateISO}.completed`;
-        setJSON(key, true);
+        markDailyCompleted(length, maxRows, dateISO);
       }
     }
   }, [answer, current, length, listsPromise, rows.length, status, showError, maxRows, dateISO, mode]);
@@ -347,18 +376,11 @@ export default function GameScreen({onNavigateToStats}: Props) {
     if (firstLaunchRef.current) {
       const today = new Date().toISOString().slice(0, 10);
       // Check if today's daily 5x6 has been completed previously
-      const key = `daily.5x6.${today}.completed`;
-      let alreadyPlayedDailyToday = getJSON<boolean>(key, false);
+      let alreadyPlayedDailyToday = isDailyCompleted(5, 6, today);
+      // Backup check from game state
       if (!alreadyPlayedDailyToday) {
-        const saved: any = getJSON(getGameStateKey(), null as any);
-        if (
-          saved &&
-          saved.mode === 'daily' &&
-          saved.dateISO === today &&
-          (saved.status === 'won' || saved.status === 'lost')
-        ) {
-          alreadyPlayedDailyToday = true;
-        }
+        const saved = getJSON(getGameStateKey(), null as {mode?: string; dateISO?: string; status?: string; length?: number; maxRows?: number} | null);
+        alreadyPlayedDailyToday = isDailyCompletedFromGameState(saved, today, 5, 6);
       }
       const nextMode: Mode = alreadyPlayedDailyToday ? 'free' : 'daily';
       // Enforce 5x6 as requested
@@ -551,7 +573,9 @@ export default function GameScreen({onNavigateToStats}: Props) {
                   start={{x: 0, y: 0}}
                   end={{x: 1, y: 1}}
                   style={styles.btnPlayAgain}>
-                  <Text style={styles.btnPlayAgainText}>Play Again</Text>
+                  <Text style={styles.btnPlayAgainText}>
+                    {playAgainIsFreeMode ? 'Play Free Mode' : 'Play Again'}
+                  </Text>
                 </LinearGradient>
               </Pressable>
             </View>

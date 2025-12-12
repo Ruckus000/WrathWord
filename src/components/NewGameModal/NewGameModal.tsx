@@ -5,6 +5,7 @@ import {BoardPreview} from './BoardPreview';
 import {PillSelector} from './PillSelector';
 import {ModeCard} from './ModeCard';
 import type {NewGameModalProps, GameMode} from './types';
+import {VALID_LENGTHS} from '../../config/gameConfig';
 
 export function NewGameModal({
   visible,
@@ -58,7 +59,7 @@ export function NewGameModal({
             <View style={styles.settingGroup}>
               <Text style={styles.settingLabel}>Word Length</Text>
               <PillSelector
-                options={[2, 3, 4, 5, 6]}
+                options={[...VALID_LENGTHS]}
                 value={length}
                 onChange={setLength}
                 accessibilityLabel="Select word length"

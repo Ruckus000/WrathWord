@@ -1,27 +1,22 @@
 import {evaluateGuess} from '../evaluateGuess';
 import {selectDaily} from '../selectDaily';
-import answers2 from '../words/answers-2';
-import allowed2 from '../words/allowed-2';
-import answers3 from '../words/answers-3';
-import allowed3 from '../words/allowed-3';
 import answers4 from '../words/answers-4';
 import allowed4 from '../words/allowed-4';
 import answers5 from '../words/answers-5';
 import allowed5 from '../words/allowed-5';
 import answers6 from '../words/answers-6';
 import allowed6 from '../words/allowed-6';
+import {VALID_LENGTHS} from '../../config/gameConfig';
 
 describe('Game Integration Tests', () => {
-  const wordLists = {
-    2: {answers: answers2, allowed: allowed2},
-    3: {answers: answers3, allowed: allowed3},
+  const wordLists: Record<number, {answers: string[]; allowed: string[]}> = {
     4: {answers: answers4, allowed: allowed4},
     5: {answers: answers5, allowed: allowed5},
     6: {answers: answers6, allowed: allowed6},
   };
 
   describe('Daily Mode with All Word Lengths', () => {
-    [2, 3, 4, 5, 6].forEach(len => {
+    VALID_LENGTHS.forEach(len => {
       it(`should select consistent daily words for length ${len}`, () => {
         const {answers} = wordLists[len];
         const date = '2025-01-15';
@@ -62,7 +57,7 @@ describe('Game Integration Tests', () => {
   });
 
   describe('Game Playability with All Lengths', () => {
-    [2, 3, 4, 5, 6].forEach(len => {
+    VALID_LENGTHS.forEach(len => {
       it(`should complete full game for length ${len}`, () => {
         const {answers, allowed} = wordLists[len];
 
@@ -134,7 +129,7 @@ describe('Game Integration Tests', () => {
   });
 
   describe('Word Validation', () => {
-    [2, 3, 4, 5, 6].forEach(len => {
+    VALID_LENGTHS.forEach(len => {
       it(`should validate words correctly for length ${len}`, () => {
         const {allowed, answers} = wordLists[len];
 
@@ -153,7 +148,7 @@ describe('Game Integration Tests', () => {
   });
 
   describe('Edge Cases', () => {
-    [2, 3, 4, 5, 6].forEach(len => {
+    VALID_LENGTHS.forEach(len => {
       it(`should handle words with duplicate letters for length ${len}`, () => {
         const {answers} = wordLists[len];
 
@@ -179,7 +174,7 @@ describe('Game Integration Tests', () => {
     it('should handle word selection quickly for all lengths', () => {
       const start = Date.now();
 
-      [2, 3, 4, 5, 6].forEach(len => {
+      VALID_LENGTHS.forEach(len => {
         const {answers} = wordLists[len];
         for (let i = 0; i < 100; i++) {
           const date = `2025-01-${String(i + 1).padStart(2, '0')}`;
@@ -188,13 +183,13 @@ describe('Game Integration Tests', () => {
       });
 
       const elapsed = Date.now() - start;
-      expect(elapsed).toBeLessThan(500); // 500 selections in under 500ms
+      expect(elapsed).toBeLessThan(500); // 300 selections in under 500ms
     });
 
     it('should evaluate guesses quickly for all lengths', () => {
       const start = Date.now();
 
-      [2, 3, 4, 5, 6].forEach(len => {
+      VALID_LENGTHS.forEach(len => {
         const {answers} = wordLists[len];
         const word = answers[0];
 
@@ -204,7 +199,7 @@ describe('Game Integration Tests', () => {
       });
 
       const elapsed = Date.now() - start;
-      expect(elapsed).toBeLessThan(100); // 5000 evaluations in under 100ms
+      expect(elapsed).toBeLessThan(100); // 3000 evaluations in under 100ms
     });
   });
 });

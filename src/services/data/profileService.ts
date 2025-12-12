@@ -6,6 +6,7 @@
  */
 
 import {isDevelopment} from '../../config/environment';
+import {VALID_LENGTHS} from '../../config/gameConfig';
 import {getSupabase, getCachedSession} from '../supabase/client';
 import {directUpsert} from '../supabase/directRpc';
 import {
@@ -195,8 +196,8 @@ class SupabaseProfileService implements IProfileService {
 
     const localProfile = getLocalProfile();
 
-    // Sync each word length
-    for (const length of [2, 3, 4, 5, 6]) {
+    // Sync each valid word length (4-6)
+    for (const length of VALID_LENGTHS) {
       const stats = localProfile.stats[length];
       if (!stats) {
         continue;
@@ -259,6 +260,7 @@ export function getProfileService(): IProfileService {
 }
 
 export const profileService = getProfileService();
+
 
 
 
