@@ -66,6 +66,13 @@ type GameStatus = 'playing' | 'won' | 'lost';
 
 const LETTERS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM']; // simple keyboard
 
+// Helper function for ordinal numbers (1st, 2nd, 3rd, etc.)
+const getOrdinal = (n: number): string => {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
+
 type Props = {
   onNavigateToStats?: () => void;
 };
@@ -88,6 +95,11 @@ export default function GameScreen({onNavigateToStats}: Props) {
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [playAgainIsFreeMode, setPlayAgainIsFreeMode] = useState(false);
   const shakeAnim = useRef(new Animated.Value(0)).current;
+
+  // Hint system state
+  const [hintUsed, setHintUsed] = useState<boolean>(false);
+  const [hintedCell, setHintedCell] = useState<{row: number; col: number} | null>(null);
+  const [hintedLetter, setHintedLetter] = useState<string | null>(null);
 
   // Track tile colors for reactivity when preferences change
   const [tileColors, setTileColors] = useState(getTileColors());
@@ -144,6 +156,10 @@ export default function GameScreen({onNavigateToStats}: Props) {
       setCurrent('');
       setStatus('playing');
       setShowResult(false);
+      // Reset hint state for new game
+      setHintUsed(false);
+      setHintedCell(null);
+      setHintedLetter(null);
       setJSON('session', {length: effectiveLength, maxRows: effectiveMaxRows, mode: effectiveMode, dateISO: targetDateISO, answerHash: next});
     },
     [getLists, length, maxRows, mode],
@@ -167,9 +183,13 @@ export default function GameScreen({onNavigateToStats}: Props) {
       feedback,
       current,
       status,
+      // Hint state
+      hintUsed,
+      hintedCell,
+      hintedLetter,
     };
     setJSON(getGameStateKey(), state);
-  }, [length, maxRows, mode, dateISO, answer, rows, feedback, current, status]);
+  }, [length, maxRows, mode, dateISO, answer, rows, feedback, current, status, hintUsed, hintedCell, hintedLetter]);
 
   // One-time initialization: on first launch, enforce 5×6 defaults and do not
   // restore any previous saved state. Otherwise, resume saved game if present.
@@ -218,8 +238,28 @@ export default function GameScreen({onNavigateToStats}: Props) {
         setAnswer(saved.answer ?? '');
         setRows(Array.isArray(saved.rows) ? saved.rows : []);
         setFeedback(Array.isArray(saved.feedback) ? saved.feedback : []);
-        setCurrent(typeof saved.current === 'string' ? saved.current : '');
         setStatus(saved.status === 'won' || saved.status === 'lost' ? saved.status : 'playing');
+
+        // Restore hint state
+        setHintUsed(saved.hintUsed ?? false);
+        setHintedCell(saved.hintedCell ?? null);
+        setHintedLetter(saved.hintedLetter ?? null);
+
+        // Reconstruct current with hinted letter if needed
+        let restoredCurrent = typeof saved.current === 'string' ? saved.current : '';
+        if (saved.hintedCell && saved.hintedLetter && saved.status === 'playing') {
+          const activeRowIdx = (Array.isArray(saved.rows) ? saved.rows.length : 0);
+          if (saved.hintedCell.row === activeRowIdx) {
+            const hintPos = saved.hintedCell.col;
+            // Ensure hint letter is at correct position with space padding
+            if (restoredCurrent.length <= hintPos || restoredCurrent[hintPos] !== saved.hintedLetter) {
+              const padded = restoredCurrent.padEnd(hintPos, ' ');
+              restoredCurrent = padded.slice(0, hintPos) + saved.hintedLetter + padded.slice(hintPos + 1);
+            }
+          }
+        }
+        setCurrent(restoredCurrent);
+
         // If game already ended, keep result modal visible for clarity
         if (saved.status === 'won' || saved.status === 'lost') setShowResult(true);
         // Do not auto-close the New Game sheet here; it may be closed by default unless firstLaunch
@@ -269,6 +309,11 @@ export default function GameScreen({onNavigateToStats}: Props) {
 
   const commitGuess = useCallback(async () => {
     if (status !== 'playing') return;
+    // Check for incomplete word (spaces indicate unfilled positions)
+    if (current.includes(' ')) {
+      showError('Not enough letters');
+      return;
+    }
     if (current.length !== length) {
       showError('Not enough letters');
       return;
@@ -340,16 +385,68 @@ export default function GameScreen({onNavigateToStats}: Props) {
     }
   }, [answer, current, length, listsPromise, rows.length, status, showError, maxRows, dateISO, mode]);
 
-  // Keyboard handlers
+  // Keyboard handlers (hint-aware)
   const onKey = useCallback(
     (k: string) => {
       if (status !== 'playing') return;
-      if (k === 'ENTER') commitGuess();
-      else if (k === 'DEL') setCurrent(c => c.slice(0, -1));
-      else if (/^[A-Z]$/.test(k) && current.length < length)
-        setCurrent(c => (c + k).toUpperCase());
+
+      const activeRow = rows.length;
+      const hintPos = (hintedCell?.row === activeRow) ? hintedCell.col : null;
+
+      if (k === 'ENTER') {
+        commitGuess();
+        return;
+      }
+
+      if (k === 'DEL') {
+        setCurrent(c => {
+          if (c.length === 0) return c;
+
+          // Find last non-space, non-hint character to delete
+          for (let i = c.length - 1; i >= 0; i--) {
+            // Skip hint position
+            if (hintPos !== null && i === hintPos) continue;
+            // Skip spaces
+            if (c[i] === ' ') continue;
+
+            // Found a deletable character at position i
+            const before = c.slice(0, i);
+            const after = c.slice(i + 1);
+            let result = before + ' ' + after;
+
+            // Trim trailing spaces but preserve hint position
+            let trimmed = result.trimEnd();
+            if (hintPos !== null && trimmed.length <= hintPos) {
+              // Must keep up to hint position
+              trimmed = result.slice(0, hintPos + 1);
+            }
+            return trimmed || '';
+          }
+          return c; // Nothing to delete
+        });
+        return;
+      }
+
+      if (/^[A-Z]$/.test(k)) {
+        setCurrent(c => {
+          // Find first empty slot, skipping hint position
+          for (let i = 0; i < length; i++) {
+            // Skip hint position
+            if (hintPos !== null && i === hintPos) continue;
+
+            const isEmpty = i >= c.length || c[i] === ' ';
+            if (isEmpty) {
+              // Insert at position i
+              const padded = c.padEnd(i + 1, ' ');
+              const result = padded.slice(0, i) + k + padded.slice(i + 1);
+              return result.trimEnd();
+            }
+          }
+          return c; // Full - no empty slots
+        });
+      }
     },
-    [commitGuess, current.length, length, status],
+    [commitGuess, length, status, hintedCell, rows.length],
   );
 
   const keyStates = useMemo(() => {
@@ -364,8 +461,12 @@ export default function GameScreen({onNavigateToStats}: Props) {
         if (!prev || rank[next] > rank[prev]) map.set(ch, next);
       }
     });
+    // Mark hinted letter as 'correct' on keyboard
+    if (hintedLetter) {
+      map.set(hintedLetter, 'correct');
+    }
     return map;
-  }, [feedback, rows]);
+  }, [feedback, rows, hintedLetter]);
 
   const handleNewGame = useCallback(() => {
     setShowSettings(true);
@@ -406,6 +507,93 @@ export default function GameScreen({onNavigateToStats}: Props) {
     setShowSettings(false);
   }, [loadNew]);
 
+  // Hint system: compute disabled state
+  const allPositionsCorrect = useMemo(() => {
+    if (status !== 'playing') return true;
+    const correctPositions = new Set<number>();
+    feedback.forEach(fb => {
+      fb.forEach((state, idx) => {
+        if (state === 'correct') correctPositions.add(idx);
+      });
+    });
+    return correctPositions.size >= length;
+  }, [feedback, length, status]);
+
+  const hintDisabled = hintUsed || status !== 'playing' || allPositionsCorrect;
+
+  // Hint handler
+  const handleHint = useCallback(() => {
+    if (hintUsed || status !== 'playing' || !answer) return;
+
+    // Find positions already marked 'correct' in any feedback row
+    const correctPositions = new Set<number>();
+    feedback.forEach(fb => {
+      fb.forEach((state, idx) => {
+        if (state === 'correct') correctPositions.add(idx);
+      });
+    });
+
+    // Get unrevealed positions
+    const unrevealedPositions: number[] = [];
+    for (let i = 0; i < length; i++) {
+      if (!correctPositions.has(i)) unrevealedPositions.push(i);
+    }
+
+    if (unrevealedPositions.length === 0) return;
+
+    // Pick random unrevealed position
+    const position = unrevealedPositions[Math.floor(Math.random() * unrevealedPositions.length)];
+    const letter = answer[position].toUpperCase();
+    const activeRow = rows.length;
+
+    setHintUsed(true);
+    setHintedCell({row: activeRow, col: position});
+    setHintedLetter(letter);
+
+    // Update current with hint letter at correct position using space padding
+    setCurrent(prev => {
+      // Pad to hint position with spaces, preserving existing typed letters
+      const padded = prev.padEnd(position, ' ');
+      let result = padded.slice(0, position) + letter;
+      // Preserve any letters after hint position (unlikely but safe)
+      if (prev.length > position + 1) {
+        result += prev.slice(position + 1);
+      }
+      return result;
+    });
+
+    triggerImpact('Light');
+    AccessibilityInfo.announceForAccessibility?.(
+      `Hint: The ${getOrdinal(position + 1)} letter is ${letter}`
+    );
+  }, [hintUsed, status, answer, feedback, length, rows.length]);
+
+  // Give Up handler
+  const handleGiveUp = useCallback(async () => {
+    setShowSettings(false);
+    setStatus('lost');
+    setShowResult(true);
+    triggerNotification('Warning');
+    AccessibilityInfo.announceForAccessibility?.(
+      `You gave up. The word was ${answer.toUpperCase()}`
+    );
+
+    await gameResultsService.saveGameResult({
+      wordLength: length,
+      won: false,
+      guesses: rows.length,
+      maxRows,
+      date: dateISO,
+      feedback,
+    });
+
+    const lists = await listsPromise;
+    markWordAsUsed(length, answer, lists.answers.length);
+    if (mode === 'daily') {
+      markDailyCompleted(length, maxRows, dateISO);
+    }
+  }, [answer, length, maxRows, dateISO, mode, rows.length, feedback, listsPromise]);
+
   const gameInProgress = rows.length > 0 && status === 'playing';
 
   const formattedDate = useMemo(() => {
@@ -429,6 +617,8 @@ export default function GameScreen({onNavigateToStats}: Props) {
         formattedDate={formattedDate}
         onMenuPress={onNavigateToStats}
         onNewGamePress={handleNewGame}
+        onHintPress={handleHint}
+        hintDisabled={hintDisabled}
       />
 
       {/* Error message */}
@@ -447,6 +637,8 @@ export default function GameScreen({onNavigateToStats}: Props) {
           current={current}
           maxRows={maxRows}
           tileColors={tileColors}
+          hintedCell={hintedCell}
+          hintedLetter={hintedLetter}
         />
       </Animated.View>
 
@@ -460,6 +652,7 @@ export default function GameScreen({onNavigateToStats}: Props) {
         gameInProgress={gameInProgress}
         onStart={handleNewGameStart}
         onCancel={handleCancel}
+        onGiveUp={handleGiveUp}
       />
 
       {/* Result modal */}
@@ -604,6 +797,8 @@ const Board = React.memo(
     current,
     maxRows,
     tileColors,
+    hintedCell,
+    hintedLetter,
   }: {
     length: number;
     rows: string[];
@@ -611,6 +806,8 @@ const Board = React.memo(
     current: string;
     maxRows: number;
     tileColors: ReturnType<typeof getTileColors>;
+    hintedCell: {row: number; col: number} | null;
+    hintedLetter: string | null;
   }) => {
     const {width} = useWindowDimensions();
     const gap = 8;
@@ -632,15 +829,21 @@ const Board = React.memo(
         {allRows.map((word, rIdx) => (
           <View key={rIdx} style={styles.row}>
             {Array.from({length}).map((_, cIdx) => {
-              const ch = word[cIdx] ?? ' ';
+              const rawCh = word[cIdx] ?? '';
+              const ch = rawCh === ' ' ? '' : rawCh; // Treat space as empty
               const state = feedback[rIdx]?.[cIdx] ?? 'empty';
-              const isActive = rIdx === activeRow && ch !== ' ';
+              const isActive = rIdx === activeRow && ch !== '';
+
+              // Check if this is a hinted tile (works for current AND submitted rows)
+              const isHinted = hintedCell?.row === rIdx && hintedCell?.col === cIdx;
+
               return (
                 <Tile
                   key={cIdx}
-                  ch={ch}
+                  ch={isHinted && rIdx === activeRow && hintedLetter ? hintedLetter : ch}
                   state={state as any}
                   isActive={isActive}
+                  isHinted={isHinted}
                   size={tileSize}
                   tileColors={tileColors}
                 />
@@ -658,12 +861,14 @@ const Tile = React.memo(
     ch,
     state,
     isActive,
+    isHinted,
     size,
     tileColors,
   }: {
     ch: string;
     state: TileState | 'empty';
     isActive?: boolean;
+    isHinted?: boolean;
     size?: {width: number; height: number};
     tileColors: ReturnType<typeof getTileColors>;
   }) => {
@@ -694,8 +899,11 @@ const Tile = React.memo(
     });
 
     // Dynamic color styles based on high contrast preference
+    // Check isHinted FIRST to override other states
     const colorStyle =
-      state === 'correct'
+      isHinted
+        ? {backgroundColor: palette.accentPurple, borderColor: palette.accentPurple}
+        : state === 'correct'
         ? {backgroundColor: tileColors.correct, borderColor: tileColors.correct}
         : state === 'present'
         ? {backgroundColor: tileColors.present, borderColor: tileColors.present}
@@ -715,7 +923,7 @@ const Tile = React.memo(
         <Text
           style={[styles.tileText, {fontSize}]}
           accessible
-          accessibilityLabel={`${ch || 'blank'} ${state !== 'empty' ? state : ''}`}
+          accessibilityLabel={`${ch || 'blank'} ${isHinted ? 'hinted' : state !== 'empty' ? state : ''}`}
           accessibilityRole="text">
           {ch !== ' ' ? ch : ''}
         </Text>

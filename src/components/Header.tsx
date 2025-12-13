@@ -11,6 +11,8 @@ type Props = {
   formattedDate?: string;
   onMenuPress?: () => void;
   onNewGamePress: () => void;
+  onHintPress?: () => void;
+  hintDisabled?: boolean;
 };
 
 export default function Header({
@@ -20,13 +22,19 @@ export default function Header({
   formattedDate,
   onMenuPress,
   onNewGamePress,
+  onHintPress,
+  hintDisabled,
 }: Props) {
   return (
     <View style={styles.header}>
       <View style={styles.headerLeft}>
         {onMenuPress && (
-          <Pressable style={styles.menuBtn} onPress={onMenuPress}>
-            <Text style={styles.menuIcon}>☰</Text>
+          <Pressable
+            style={styles.menuBtn}
+            onPress={onMenuPress}
+            accessibilityLabel="Settings"
+            accessibilityRole="button">
+            <Text style={styles.menuIcon}>⚙️</Text>
           </Pressable>
         )}
       </View>
@@ -36,14 +44,20 @@ export default function Header({
           <View style={[styles.modeDot, mode === 'free' && styles.modeDotFree]} />
           <Text style={styles.modeText} numberOfLines={1}>{mode === 'daily' ? 'Daily' : 'Free'}</Text>
         </View>
-        <View style={styles.configDisplay}>
-          <Text style={styles.configText}>
-            {length}×{maxRows}
-          </Text>
-        </View>
       </View>
 
       <View style={styles.headerRight}>
+        {onHintPress && (
+          <Pressable
+            style={[styles.hintBtn, hintDisabled && styles.hintBtnDisabled]}
+            onPress={hintDisabled ? undefined : onHintPress}
+            disabled={hintDisabled}
+            accessibilityLabel={hintDisabled ? 'Hint already used' : 'Use hint to reveal one letter'}
+            accessibilityRole="button"
+            accessibilityState={{disabled: hintDisabled}}>
+            <Text style={styles.hintIcon}>💡</Text>
+          </Pressable>
+        )}
         <Pressable onPress={onNewGamePress}>
           <LinearGradient
             colors={[palette.gradientStart, palette.gradientEnd]}
@@ -123,19 +137,6 @@ const styles = StyleSheet.create({
     color: palette.textMuted,
     fontWeight: '500',
   },
-  configDisplay: {
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    backgroundColor: palette.accentPurpleLight,
-    borderWidth: 1,
-    borderColor: palette.accentPurpleBorder,
-    borderRadius: 8,
-  },
-  configText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: palette.accentPurple,
-  },
   headerRight: {
     position: 'absolute',
     right: 20,
@@ -154,5 +155,23 @@ const styles = StyleSheet.create({
     color: palette.textPrimary,
     fontWeight: '600',
     fontSize: 13,
+  },
+  hintBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: palette.accentPurpleLight,
+    borderWidth: 1,
+    borderColor: palette.accentPurpleBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hintBtnDisabled: {
+    backgroundColor: palette.tileEmpty,
+    borderColor: palette.borderLight,
+    opacity: 0.4,
+  },
+  hintIcon: {
+    fontSize: 18,
   },
 });

@@ -13,6 +13,7 @@ export function NewGameModal({
   gameInProgress = false,
   onStart,
   onCancel,
+  onGiveUp,
 }: NewGameModalProps) {
   const [length, setLength] = useState(initialConfig.length);
   const [maxRows, setMaxRows] = useState(initialConfig.maxRows);
@@ -52,6 +53,21 @@ export function NewGameModal({
 
           {/* Board Preview */}
           <BoardPreview length={length} maxRows={maxRows} mode={mode} />
+
+          {/* Section divider - always present */}
+          <View style={styles.sectionDivider} />
+
+          {/* Give Up link - only when game in progress */}
+          {gameInProgress && onGiveUp && (
+            <View style={styles.giveUpSection}>
+              <Pressable
+                onPress={onGiveUp}
+                accessibilityLabel="Give up current game and reveal answer"
+                accessibilityRole="button">
+                <Text style={styles.giveUpText}>Give Up</Text>
+              </Pressable>
+            </View>
+          )}
 
           {/* Content */}
           <View style={styles.content}>
@@ -222,5 +238,22 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: '#2c2c2e',
+    marginHorizontal: 24,
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  giveUpSection: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  giveUpText: {
+    fontSize: 14,
+    color: '#888888',
+    fontWeight: '500',
   },
 });

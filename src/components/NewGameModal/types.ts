@@ -12,4 +12,5 @@ export type NewGameModalProps = {
   gameInProgress?: boolean;
   onStart: (config: GameConfig) => void;
   onCancel: () => void;
+  onGiveUp?: () => void;
 };
