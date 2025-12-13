@@ -13,22 +13,18 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Modal,
   AccessibilityInfo,
-  useWindowDimensions,
   Animated,
-  Share,
-  ScrollView,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {triggerImpact, triggerNotification} from '../utils/haptics';
+import {getOrdinal} from '../utils/formatters';
 import {evaluateGuess, TileState} from '../logic/evaluateGuess';
 import {selectDaily} from '../logic/selectDaily';
 import {getJSON, setJSON} from '../storage/mmkv';
 import {getScopedKey} from '../storage/userScope';
 import {
   getProfile,
-  getStatsForLength,
   getWinRate,
   markWordAsUsed,
   getUnusedWords,
@@ -40,17 +36,14 @@ import {
 } from '../storage/dailyCompletion';
 
 import {gameResultsService} from '../services/data';
-import {
-  generateShareText,
-  getResultEmoji,
-  getResultTitle,
-} from '../logic/shareResult';
 
 import Header from '../components/Header';
 import {NewGameModal, GameConfig} from '../components/NewGameModal';
+import {Board} from '../components/Board';
+import {Keyboard} from '../components/Keyboard';
+import {ResultModal} from '../components/ResultModal';
 import {palette} from '../theme/colors';
 import {getTileColors} from '../theme/getColors';
-import LinearGradient from 'react-native-linear-gradient';
 
 const GAME_STATE_BASE_KEY = 'game.state';
 
@@ -63,15 +56,6 @@ function getGameStateKey(): string {
 
 type Mode = 'daily' | 'free';
 type GameStatus = 'playing' | 'won' | 'lost';
-
-const LETTERS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM']; // simple keyboard
-
-// Helper function for ordinal numbers (1st, 2nd, 3rd, etc.)
-const getOrdinal = (n: number): string => {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
-};
 
 type Props = {
   onNavigateToStats?: () => void;
@@ -656,380 +640,25 @@ export default function GameScreen({onNavigateToStats}: Props) {
       />
 
       {/* Result modal */}
-      <Modal transparent visible={showResult} animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.resultModalCard}>
-            {/* Header */}
-            <View style={styles.resultHeader}>
-              <Text style={styles.resultEmoji}>
-                {getResultEmoji(rows.length, maxRows, status === 'won')}
-              </Text>
-              <Text style={styles.resultTitle}>
-                {getResultTitle(rows.length, maxRows, status === 'won')}
-              </Text>
-              <Text style={styles.resultSubtitle}>
-                {length}×{maxRows} · {new Date(dateISO).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}
-              </Text>
-            </View>
-
-            {/* Score and Word Section - Side by Side */}
-            <View style={styles.scoreWordRow}>
-              {/* Score Section - Smaller, on the left */}
-              <View style={styles.scoreSection}>
-                <Text style={styles.scoreLabel}>Score</Text>
-                <Text style={[styles.scoreValue, status === 'lost' && styles.scoreValueLost]}>
-                  {status === 'won' ? `${rows.length}/${maxRows}` : `X/${maxRows}`}
-                </Text>
-              </View>
-
-              {/* Word Display - Larger, on the right */}
-              <View style={[styles.wordDisplay, status === 'lost' && styles.wordDisplayLost]}>
-                <Text style={[styles.wordLabel, status === 'lost' && styles.wordLabelLost]}>
-                  {status === 'won' ? 'The word' : 'The word was'}
-                </Text>
-                <Text style={[styles.wordText, status === 'lost' && styles.wordTextLost]}>
-                  {answer.toUpperCase()}
-                </Text>
-              </View>
-            </View>
-
-            {/* Grid Section */}
-            <View style={styles.gridSection}>
-              <Text style={styles.gridLabel}>Your Guesses</Text>
-              <View style={styles.guessGrid}>
-                {feedback.map((row, rIdx) => (
-                  <View key={rIdx} style={styles.guessRow}>
-                    {row.map((state, cIdx) => {
-                      const tileColor =
-                        state === 'correct'
-                          ? tileColors.correct
-                          : state === 'present'
-                          ? tileColors.present
-                          : tileColors.absent;
-                      return (
-                        <View
-                          key={cIdx}
-                          style={[styles.guessTile, {backgroundColor: tileColor}]}
-                        />
-                      );
-                    })}
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            {/* Streak Display */}
-            {(() => {
-              const stats = getStatsForLength(length);
-              const hasStreak = stats.currentStreak > 0 || stats.maxStreak > 0;
-              return hasStreak ? (
-                <View style={styles.streakSection}>
-                  {stats.currentStreak > 0 && (
-                    <View style={styles.streakItem}>
-                      <Text style={styles.streakLabel}>🔥 Current Streak</Text>
-                      <Text style={styles.streakValue}>{stats.currentStreak} days</Text>
-                    </View>
-                  )}
-                  {stats.maxStreak > 0 && (
-                    <View style={styles.streakItem}>
-                      <Text style={styles.streakLabel}>⭐ Best Streak</Text>
-                      <Text style={styles.streakValue}>{stats.maxStreak} days</Text>
-                    </View>
-                  )}
-                </View>
-              ) : null;
-            })()}
-
-            {/* Buttons */}
-            <View style={styles.resultButtonGroup}>
-              <Pressable
-                style={styles.btnShare}
-                onPress={async () => {
-                  const shareData = generateShareText({
-                    length,
-                    maxRows,
-                    guesses: rows.length,
-                    won: status === 'won',
-                    feedback,
-                    date: dateISO,
-                  });
-                  try {
-                    await Share.share({
-                      message: shareData.text,
-                    });
-                  } catch (error) {
-                    // User cancelled or error
-                  }
-                }}>
-                <Text style={styles.btnShareText}>Share</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setShowResult(false);
-                  // Immediately start a new game with the same settings
-                  // without opening the New Game sheet
-                  loadNew();
-                }}>
-                <LinearGradient
-                  colors={[palette.gradientStart, palette.gradientEnd]}
-                  start={{x: 0, y: 0}}
-                  end={{x: 1, y: 1}}
-                  style={styles.btnPlayAgain}>
-                  <Text style={styles.btnPlayAgainText}>
-                    {playAgainIsFreeMode ? 'Play Free Mode' : 'Play Again'}
-                  </Text>
-                </LinearGradient>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <ResultModal
+        visible={showResult}
+        status={status}
+        rows={rows}
+        maxRows={maxRows}
+        length={length}
+        feedback={feedback}
+        dateISO={dateISO}
+        answer={answer}
+        tileColors={tileColors}
+        playAgainIsFreeMode={playAgainIsFreeMode}
+        onPlayAgain={() => {
+          setShowResult(false);
+          loadNew();
+        }}
+      />
     </View>
   );
 }
-
-/** UI bits (kept here to stay single-screen). Memoize to reduce re-renders. */
-const Board = React.memo(
-  ({
-    length,
-    rows,
-    feedback,
-    current,
-    maxRows,
-    tileColors,
-    hintedCell,
-    hintedLetter,
-  }: {
-    length: number;
-    rows: string[];
-    feedback: TileState[][];
-    current: string;
-    maxRows: number;
-    tileColors: ReturnType<typeof getTileColors>;
-    hintedCell: {row: number; col: number} | null;
-    hintedLetter: string | null;
-  }) => {
-    const {width} = useWindowDimensions();
-    const gap = 8;
-    const maxTileSize = 62;
-    const padding = 16;
-    const availableWidth = width - padding * 2;
-    const calculatedSize = Math.min(
-      maxTileSize,
-      Math.floor((availableWidth - gap * (length - 1)) / length),
-    );
-    const tileSize = {width: calculatedSize, height: calculatedSize * 1.12};
-
-    const allRows = [...rows];
-    const activeRow = rows.length < maxRows ? rows.length : -1;
-    if (rows.length < maxRows) allRows.push(current.padEnd(length, ' '));
-    while (allRows.length < maxRows) allRows.push(''.padEnd(length, ' '));
-    return (
-      <View style={styles.board}>
-        {allRows.map((word, rIdx) => (
-          <View key={rIdx} style={styles.row}>
-            {Array.from({length}).map((_, cIdx) => {
-              const rawCh = word[cIdx] ?? '';
-              const ch = rawCh === ' ' ? '' : rawCh; // Treat space as empty
-              const state = feedback[rIdx]?.[cIdx] ?? 'empty';
-              const isActive = rIdx === activeRow && ch !== '';
-
-              // Check if this is a hinted tile (works for current AND submitted rows)
-              const isHinted = hintedCell?.row === rIdx && hintedCell?.col === cIdx;
-
-              return (
-                <Tile
-                  key={cIdx}
-                  ch={isHinted && rIdx === activeRow && hintedLetter ? hintedLetter : ch}
-                  state={state as any}
-                  isActive={isActive}
-                  isHinted={isHinted}
-                  size={tileSize}
-                  tileColors={tileColors}
-                />
-              );
-            })}
-          </View>
-        ))}
-      </View>
-    );
-  },
-);
-
-const Tile = React.memo(
-  ({
-    ch,
-    state,
-    isActive,
-    isHinted,
-    size,
-    tileColors,
-  }: {
-    ch: string;
-    state: TileState | 'empty';
-    isActive?: boolean;
-    isHinted?: boolean;
-    size?: {width: number; height: number};
-    tileColors: ReturnType<typeof getTileColors>;
-  }) => {
-    const fontSize = size ? Math.floor(size.width * 0.54) : 28;
-    const flipAnim = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-      if (state !== 'empty') {
-        // Trigger flip animation when tile gets a state
-        Animated.sequence([
-          Animated.timing(flipAnim, {
-            toValue: 1,
-            duration: 250,
-            useNativeDriver: true,
-          }),
-          Animated.timing(flipAnim, {
-            toValue: 0,
-            duration: 250,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }
-    }, [state, flipAnim]);
-
-    const rotateX = flipAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: ['0deg', '90deg'],
-    });
-
-    // Dynamic color styles based on high contrast preference
-    // Check isHinted FIRST to override other states
-    const colorStyle =
-      isHinted
-        ? {backgroundColor: palette.accentPurple, borderColor: palette.accentPurple}
-        : state === 'correct'
-        ? {backgroundColor: tileColors.correct, borderColor: tileColors.correct}
-        : state === 'present'
-        ? {backgroundColor: tileColors.present, borderColor: tileColors.present}
-        : state === 'absent'
-        ? {backgroundColor: tileColors.absent, borderColor: tileColors.absent}
-        : null;
-
-    return (
-      <Animated.View
-        style={[
-          styles.tile,
-          size,
-          colorStyle,
-          isActive && styles.tileActive,
-          {transform: [{rotateX}]},
-        ]}>
-        <Text
-          style={[styles.tileText, {fontSize}]}
-          accessible
-          accessibilityLabel={`${ch || 'blank'} ${isHinted ? 'hinted' : state !== 'empty' ? state : ''}`}
-          accessibilityRole="text">
-          {ch !== ' ' ? ch : ''}
-        </Text>
-      </Animated.View>
-    );
-  },
-);
-
-const Keyboard = React.memo(
-  ({
-    onKey,
-    keyStates,
-    tileColors,
-  }: {
-    onKey: (k: string) => void;
-    keyStates: Map<string, TileState>;
-    tileColors: ReturnType<typeof getTileColors>;
-  }) => {
-    return (
-      <View style={styles.kb}>
-        {LETTERS.map((row, idx) => (
-          <View key={idx} style={styles.kbRow}>
-            {idx === 2 && (
-              <Key label="↵" flex={2} onPress={() => onKey('ENTER')} isAction accessibilityLabel="Enter" />
-            )}
-            {row.split('').map(k => {
-              const st = keyStates.get(k);
-              const disabled = st === 'absent';
-              return (
-                <Key
-                  key={k}
-                  label={k}
-                  state={st}
-                  disabled={disabled}
-                  onPress={() => onKey(k)}
-                  tileColors={tileColors}
-                />
-              );
-            })}
-            {idx === 2 && (
-              <Key label="⌫" flex={2} onPress={() => onKey('DEL')} isAction accessibilityLabel="Delete" />
-            )}
-          </View>
-        ))}
-      </View>
-    );
-  },
-);
-
-const Key = React.memo(
-  ({
-    label,
-    onPress,
-    state,
-    flex,
-    isAction,
-    accessibilityLabel,
-    disabled,
-    tileColors,
-  }: {
-    label: string;
-    onPress: () => void;
-    state?: TileState;
-    flex?: number;
-    isAction?: boolean;
-    accessibilityLabel?: string;
-    disabled?: boolean;
-    tileColors?: ReturnType<typeof getTileColors>;
-  }) => {
-    // Dynamic color styles based on high contrast preference
-    const stateStyle =
-      state === 'correct' && tileColors
-        ? {backgroundColor: tileColors.correct}
-        : state === 'present' && tileColors
-        ? {backgroundColor: tileColors.present}
-        : state === 'absent' && tileColors
-        ? {backgroundColor: tileColors.absent}
-        : null;
-
-    return (
-      <Pressable
-        onPress={disabled ? undefined : onPress}
-        disabled={disabled}
-        style={({pressed}) => [
-          styles.key,
-          {flex: flex ?? 1},
-          stateStyle,
-          isAction && styles.keyAction,
-          disabled && styles.keyDisabled,
-          !disabled && pressed && styles.keyPressed,
-        ]}
-        accessibilityRole="button"
-        accessibilityState={{disabled}}
-        accessibilityLabel={accessibilityLabel || label}>
-        <Text
-          style={[
-            styles.keyText,
-            isAction && styles.keyTextAction,
-            disabled && styles.keyTextDisabled,
-          ]}>
-          {label}
-        </Text>
-      </Pressable>
-    );
-  },
-);
 
 const styles = StyleSheet.create({
   container: {
@@ -1115,257 +744,5 @@ const styles = StyleSheet.create({
     color: '#ff453a',
     fontSize: 14,
     fontWeight: '600',
-  },
-
-  board: {flex: 1, justifyContent: 'center', gap: 8, paddingVertical: 12},
-  row: {flexDirection: 'row', gap: 8, alignSelf: 'center'},
-  tile: {
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: palette.tileBorder,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: palette.tileEmpty,
-  },
-  tileActive: {
-    borderColor: palette.tileBorderActive,
-    borderWidth: 2,
-    transform: [{scale: 1.05}],
-  },
-  tileText: {
-    color: palette.textPrimary,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  tCorrect: {backgroundColor: palette.correct, borderColor: palette.correct},
-  tPresent: {backgroundColor: palette.present, borderColor: palette.present},
-  tAbsent: {backgroundColor: palette.absent, borderColor: palette.absent},
-
-  kb: {gap: 8, marginBottom: 12, paddingHorizontal: 2},
-  kbRow: {flexDirection: 'row', gap: 4, justifyContent: 'center'},
-  key: {
-    minWidth: 31,
-    height: 52,
-    borderRadius: 6,
-    backgroundColor: palette.keyBase,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  keyPressed: {
-    backgroundColor: palette.keyPressed,
-    transform: [{scale: 0.94}],
-  },
-  keyAction: {
-    backgroundColor: palette.keyAction,
-  },
-  keyText: {
-    color: palette.textPrimary,
-    fontSize: 15,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  keyTextAction: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  kCorrect: {backgroundColor: palette.correct},
-  kPresent: {backgroundColor: palette.present},
-  kAbsent: {backgroundColor: palette.absent},
-  keyDisabled: {
-    backgroundColor: palette.keyDisabled,
-  },
-  keyTextDisabled: {
-    color: palette.keyAction,
-  },
-
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: palette.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // Result Modal Styles (from HTML design)
-  resultModalCard: {
-    width: '90%',
-    maxWidth: 340,
-    backgroundColor: palette.card,
-    borderRadius: 20,
-    padding: 32,
-    paddingTop: 28,
-    paddingBottom: 28,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 20},
-    shadowOpacity: 0.5,
-    shadowRadius: 60,
-    elevation: 24,
-    borderWidth: 1,
-    borderColor: palette.cardBorder,
-  },
-  resultHeader: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  resultEmoji: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  resultTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: palette.textPrimary,
-    marginBottom: 8,
-  },
-  resultSubtitle: {
-    fontSize: 14,
-    color: palette.textMuted,
-    fontWeight: '500',
-  },
-  scoreWordRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  scoreSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    backgroundColor: '#2c2c2e',
-    borderRadius: 12,
-    minWidth: 90,
-  },
-  scoreLabel: {
-    fontSize: 11,
-    color: '#8e8e93',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-    fontWeight: '600',
-  },
-  scoreValue: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#30d158',
-    lineHeight: 32,
-  },
-  scoreValueLost: {
-    color: '#ff453a',
-  },
-  wordDisplay: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    backgroundColor: 'rgba(48, 209, 88, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(48, 209, 88, 0.2)',
-    borderRadius: 8,
-  },
-  wordDisplayLost: {
-    backgroundColor: 'rgba(255, 69, 58, 0.1)',
-    borderColor: 'rgba(255, 69, 58, 0.2)',
-  },
-  wordLabel: {
-    fontSize: 11,
-    color: '#30d158',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-    fontWeight: '600',
-  },
-  wordLabelLost: {
-    color: '#ff453a',
-  },
-  wordText: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#30d158',
-    letterSpacing: 2,
-  },
-  wordTextLost: {
-    color: '#ff453a',
-  },
-  gridSection: {
-    marginBottom: 20,
-  },
-  gridLabel: {
-    fontSize: 12,
-    color: '#8e8e93',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  guessGrid: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  guessRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  guessTile: {
-    width: 32,
-    height: 32,
-    borderRadius: 4,
-  },
-  streakSection: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 16,
-    backgroundColor: 'rgba(48, 209, 88, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(48, 209, 88, 0.2)',
-    borderRadius: 10,
-    marginBottom: 20,
-  },
-  streakItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  streakLabel: {
-    fontSize: 13,
-    color: '#30d158',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  streakValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#30d158',
-  },
-  resultButtonGroup: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 28,
-  },
-  btnShare: {
-    flex: 1,
-    backgroundColor: palette.accentPurpleLight,
-    borderWidth: 1,
-    borderColor: palette.accentPurpleBorder,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  btnShareText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: palette.accentPurple,
-  },
-  btnPlayAgain: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  btnPlayAgainText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: palette.textPrimary,
   },
 });

@@ -1,0 +1,193 @@
+// src/components/ResultModal/styles.ts
+import {StyleSheet} from 'react-native';
+import {palette} from '../../theme/colors';
+
+export const styles = StyleSheet.create({
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: palette.overlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  resultModalCard: {
+    width: '90%',
+    maxWidth: 340,
+    backgroundColor: palette.card,
+    borderRadius: 20,
+    padding: 32,
+    paddingTop: 28,
+    paddingBottom: 28,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 20},
+    shadowOpacity: 0.5,
+    shadowRadius: 60,
+    elevation: 24,
+    borderWidth: 1,
+    borderColor: palette.cardBorder,
+  },
+  resultHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  resultEmoji: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  resultTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: palette.textPrimary,
+    marginBottom: 8,
+  },
+  resultSubtitle: {
+    fontSize: 14,
+    color: palette.textMuted,
+    fontWeight: '500',
+  },
+  scoreWordRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  scoreSection: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    backgroundColor: '#2c2c2e',
+    borderRadius: 12,
+    minWidth: 90,
+  },
+  scoreLabel: {
+    fontSize: 11,
+    color: '#8e8e93',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  scoreValue: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#30d158',
+    lineHeight: 32,
+  },
+  scoreValueLost: {
+    color: '#ff453a',
+  },
+  wordDisplay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    backgroundColor: 'rgba(48, 209, 88, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(48, 209, 88, 0.2)',
+    borderRadius: 8,
+  },
+  wordDisplayLost: {
+    backgroundColor: 'rgba(255, 69, 58, 0.1)',
+    borderColor: 'rgba(255, 69, 58, 0.2)',
+  },
+  wordLabel: {
+    fontSize: 11,
+    color: '#30d158',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  wordLabelLost: {
+    color: '#ff453a',
+  },
+  wordText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#30d158',
+    letterSpacing: 2,
+  },
+  wordTextLost: {
+    color: '#ff453a',
+  },
+  gridSection: {
+    marginBottom: 20,
+  },
+  gridLabel: {
+    fontSize: 12,
+    color: '#8e8e93',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  guessGrid: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  guessRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  guessTile: {
+    width: 32,
+    height: 32,
+    borderRadius: 4,
+  },
+  streakSection: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 16,
+    backgroundColor: 'rgba(48, 209, 88, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(48, 209, 88, 0.2)',
+    borderRadius: 10,
+    marginBottom: 20,
+  },
+  streakItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  streakLabel: {
+    fontSize: 13,
+    color: '#30d158',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  streakValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#30d158',
+  },
+  resultButtonGroup: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 28,
+  },
+  btnShare: {
+    flex: 1,
+    backgroundColor: palette.accentPurpleLight,
+    borderWidth: 1,
+    borderColor: palette.accentPurpleBorder,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  btnShareText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: palette.accentPurple,
+  },
+  btnPlayAgain: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  btnPlayAgainText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: palette.textPrimary,
+  },
+});
