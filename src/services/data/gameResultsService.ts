@@ -6,7 +6,7 @@
  */
 
 import {isDevelopment} from '../../config/environment';
-import {getSupabase, getCachedSession} from '../supabase/client';
+import {getSupabase, getCachedSession, getValidAccessToken} from '../supabase/client';
 import {directInsert} from '../supabase/directRpc';
 import {TileState} from '../../logic/evaluateGuess';
 import {recordGameResult as recordLocal} from '../../storage/profile';
@@ -86,15 +86,17 @@ class SupabaseGameResultsService implements IGameResultsService {
     });
     console.log('[GameResultsService] Saved locally');
 
-    // Use cached session (avoids getSession() which hangs)
+    // Get a valid token (refreshes if expiring soon)
+    const token = await getValidAccessToken();
     const session = getCachedSession();
-    if (!session) {
+
+    if (!token || !session) {
       console.warn(
-        '[GameResultsService] No cached session - skipping cloud sync',
+        '[GameResultsService] No valid token or session - skipping cloud sync',
       );
       return;
     }
-    console.log('[GameResultsService] Using cached session for user:', session.user.id);
+    console.log('[GameResultsService] Using valid token for user:', session.user.id);
 
     try {
       // Use directInsert with timeout (avoids Supabase JS client pipeline)
@@ -109,7 +111,7 @@ class SupabaseGameResultsService implements IGameResultsService {
           date: result.date,
           feedback: result.feedback,
         },
-        session.accessToken,
+        token,
       );
 
       if (error) {

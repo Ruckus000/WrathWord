@@ -12,10 +12,12 @@ import React, {
   useEffect,
   ReactNode,
 } from 'react';
+import {AppState, AppStateStatus} from 'react-native';
 import {authService, AuthSession, AuthUser} from '../services/auth';
 import {isDevelopment} from '../config/environment';
 import {setCurrentUserId} from '../storage/userScope';
 import {friendsService, getProfileService} from '../services/data';
+import {getSupabase} from '../services/supabase/client';
 
 // Stable user ID for development mode
 const DEV_MODE_USER_ID = 'dev-user';
@@ -117,6 +119,41 @@ export function AuthProvider({children}: AuthProviderProps) {
     return () => {
       isMounted = false;
       unsubscribe();
+    };
+  }, []);
+
+  // Manage Supabase auto-refresh based on app state
+  // This ensures tokens are refreshed when app is in foreground
+  useEffect(() => {
+    if (isDevelopment) {
+      return; // Skip in dev mode - no Supabase client
+    }
+
+    const supabase = getSupabase();
+    if (!supabase) {
+      return;
+    }
+
+    // Start auto refresh when app launches
+    supabase.auth.startAutoRefresh();
+    console.log('[AuthContext] Started Supabase auto-refresh');
+
+    // Handle app state changes
+    const handleAppStateChange = (state: AppStateStatus) => {
+      if (state === 'active') {
+        supabase.auth.startAutoRefresh();
+        console.log('[AuthContext] App active - started auto-refresh');
+      } else {
+        supabase.auth.stopAutoRefresh();
+        console.log('[AuthContext] App backgrounded - stopped auto-refresh');
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      supabase.auth.stopAutoRefresh();
+      subscription.remove();
     };
   }, []);
 

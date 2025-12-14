@@ -11,7 +11,7 @@
  */
 
 import {isDevelopment} from '../../config/environment';
-import {getSupabase} from '../supabase/client';
+import {getSupabase, getValidAccessToken, getCachedSession} from '../supabase/client';
 import {directRpc, directQuery} from '../supabase/directRpc';
 import {Friend} from '../../data/mockFriends';
 import {MOCK_FRIENDS} from '../../data/mockFriends';
@@ -190,8 +190,11 @@ class SupabaseFriendsService implements IFriendsService {
       return new Map();
     }
 
-    // If we have accessToken, use direct query (fast path)
-    if (accessToken) {
+    // Get a valid token - either use provided one or fetch a fresh one
+    const token = accessToken || await getValidAccessToken();
+
+    // If we have a token, use direct query (fast path)
+    if (token) {
       try {
         const today = new Date().toISOString().split('T')[0];
         const {data, error} = await directQuery<{
@@ -206,7 +209,7 @@ class SupabaseFriendsService implements IFriendsService {
             date: `eq.${today}`,
             user_id: `in.(${userIds.join(',')})`,
           },
-          accessToken,
+          accessToken: token,
           timeoutMs: 5000,
         });
 
@@ -333,18 +336,23 @@ class SupabaseFriendsService implements IFriendsService {
   private async fetchFriendsFromApi(userId?: string, accessToken?: string): Promise<Friend[]> {
     console.log('[FriendsService] fetchFriendsFromApi: Starting... userId:', !!userId, 'accessToken:', !!accessToken);
 
-    // FAST PATH: Use directRpc if we have both userId and accessToken
-    if (userId && accessToken) {
+    // Get a valid token - either use provided one or fetch a fresh one
+    const token = accessToken || await getValidAccessToken();
+    // Get userId from cached session if not provided
+    const finalUserId = userId || getCachedSession()?.user?.id;
+
+    // FAST PATH: Use directRpc if we have both userId and token
+    if (finalUserId && token) {
       console.log('[FriendsService] fetchFriendsFromApi: Using direct RPC (fast path)...');
       const {data, error} = await directRpc<any[]>({
         functionName: 'get_leaderboard',
         params: {
-          p_user_id: userId,
+          p_user_id: finalUserId,
           p_friends_only: true,
           p_period: 'alltime',
           p_limit: 100,
         },
-        accessToken,
+        accessToken: token,
         timeoutMs: 8000,
       });
 
@@ -362,7 +370,7 @@ class SupabaseFriendsService implements IFriendsService {
 
       // Fetch today's results using direct query
       const userIds = data.map((row: any) => row.user_id);
-      const todayResults = await this.getTodayResults(userIds, accessToken);
+      const todayResults = await this.getTodayResults(userIds, token);
 
       // Transform to Friend type
       return data.map((row: any) => {
@@ -402,20 +410,20 @@ class SupabaseFriendsService implements IFriendsService {
     }
 
     // If userId was passed, use it directly (avoids getSession which can hang)
-    let finalUserId = userId;
-    if (!finalUserId) {
+    let slowPathUserId = userId;
+    if (!slowPathUserId) {
       console.log('[FriendsService] fetchFriendsFromApi: No userId passed, getting session...');
       const session = await this.getSessionWithTimeout(supabase);
       if (!session?.user) {
         console.log('[FriendsService] fetchFriendsFromApi: No session/user (timed out or not signed in)');
         return [];
       }
-      finalUserId = session.user.id;
+      slowPathUserId = session.user.id;
     }
 
     console.log('[FriendsService] fetchFriendsFromApi: Calling supabase.rpc (may hang)...');
     const {data, error} = await supabase.rpc('get_leaderboard', {
-      p_user_id: finalUserId,
+      p_user_id: slowPathUserId,
       p_friends_only: true,
       p_period: 'alltime',
       p_limit: 100,
@@ -674,18 +682,23 @@ class SupabaseFriendsService implements IFriendsService {
   private async fetchGlobalLeaderboardFromApi(limit: number, userId?: string, accessToken?: string): Promise<Friend[]> {
     console.log('[FriendsService] fetchGlobalLeaderboardFromApi: Starting... userId:', !!userId, 'accessToken:', !!accessToken);
 
-    // FAST PATH: Use directRpc if we have both userId and accessToken
-    if (userId && accessToken) {
+    // Get a valid token - either use provided one or fetch a fresh one
+    const token = accessToken || await getValidAccessToken();
+    // Get userId from cached session if not provided
+    const finalUserId = userId || getCachedSession()?.user?.id;
+
+    // FAST PATH: Use directRpc if we have both userId and token
+    if (finalUserId && token) {
       console.log('[FriendsService] fetchGlobalLeaderboardFromApi: Using direct RPC (fast path)...');
       const {data, error} = await directRpc<any[]>({
         functionName: 'get_leaderboard',
         params: {
-          p_user_id: userId,
+          p_user_id: finalUserId,
           p_friends_only: false,
           p_period: 'alltime',
           p_limit: limit,
         },
-        accessToken,
+        accessToken: token,
         timeoutMs: 8000,
       });
 
@@ -703,7 +716,7 @@ class SupabaseFriendsService implements IFriendsService {
 
       // Fetch today's results using direct query
       const userIds = data.map((row: any) => row.user_id);
-      const todayResults = await this.getTodayResults(userIds, accessToken);
+      const todayResults = await this.getTodayResults(userIds, token);
 
       // Transform to Friend type
       return data.map((row: any) => {
@@ -743,20 +756,20 @@ class SupabaseFriendsService implements IFriendsService {
     }
 
     // If userId was passed, use it directly (avoids getSession which can hang)
-    let finalUserId = userId;
-    if (!finalUserId) {
+    let slowPathUserId = userId;
+    if (!slowPathUserId) {
       console.log('[FriendsService] fetchGlobalLeaderboardFromApi: No userId passed, getting session...');
       const session = await this.getSessionWithTimeout(supabase);
       if (!session?.user) {
         console.log('[FriendsService] fetchGlobalLeaderboardFromApi: No session/user (timed out or not signed in)');
         return [];
       }
-      finalUserId = session.user.id;
+      slowPathUserId = session.user.id;
     }
 
     console.log('[FriendsService] fetchGlobalLeaderboardFromApi: Calling supabase.rpc (may hang)...');
     const {data, error} = await supabase.rpc('get_leaderboard', {
-      p_user_id: finalUserId,
+      p_user_id: slowPathUserId,
       p_friends_only: false,
       p_period: 'alltime',
       p_limit: limit,

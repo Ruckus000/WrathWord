@@ -7,7 +7,7 @@
 
 import {isDevelopment} from '../../config/environment';
 import {VALID_LENGTHS} from '../../config/gameConfig';
-import {getSupabase, getCachedSession} from '../supabase/client';
+import {getSupabase, getCachedSession, getValidAccessToken} from '../supabase/client';
 import {directUpsert} from '../supabase/directRpc';
 import {
   UserProfile,
@@ -186,10 +186,12 @@ class SupabaseProfileService implements IProfileService {
   async syncStats(): Promise<void> {
     console.log('[ProfileService] syncStats called');
 
-    // Use cached session (avoids getSession() which hangs)
+    // Get a valid token (refreshes if expiring soon)
+    const token = await getValidAccessToken();
     const session = getCachedSession();
-    if (!session) {
-      console.warn('[ProfileService] No cached session - skipping sync');
+
+    if (!token || !session) {
+      console.warn('[ProfileService] No valid token or session - skipping sync');
       return;
     }
     console.log('[ProfileService] Syncing stats for user:', session.user.id);
@@ -229,7 +231,7 @@ class SupabaseProfileService implements IProfileService {
           last_played_date: stats.lastPlayedDate,
           updated_at: new Date().toISOString(),
         },
-        session.accessToken,
+        token,
         'user_id,word_length',
       );
 

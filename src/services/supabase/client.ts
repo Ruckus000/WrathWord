@@ -45,6 +45,109 @@ export function getCachedSession(): CachedSession | null {
   return _cachedSession;
 }
 
+/**
+ * Decode JWT and check if it expires within the threshold (default 5 minutes)
+ * Returns true if token is expiring soon or cannot be parsed
+ */
+function isTokenExpiringSoon(token: string, thresholdMs = 5 * 60 * 1000): boolean {
+  try {
+    // JWT format: header.payload.signature
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return true; // Invalid JWT format
+    }
+
+    // Decode base64 payload (handle URL-safe base64)
+    const base64Payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(base64Payload));
+
+    if (typeof payload.exp !== 'number') {
+      return true; // No expiry claim
+    }
+
+    const expiresAt = payload.exp * 1000; // Convert to milliseconds
+    const now = Date.now();
+    const isExpiring = expiresAt - now < thresholdMs;
+
+    if (isExpiring) {
+      const remainingMs = expiresAt - now;
+      console.log(`[Supabase] Token expires in ${Math.round(remainingMs / 1000)}s (threshold: ${thresholdMs / 1000}s)`);
+    }
+
+    return isExpiring;
+  } catch (error) {
+    // If we can't parse, assume it might be expired
+    console.warn('[Supabase] Failed to parse JWT for expiry check:', error);
+    return true;
+  }
+}
+
+// Simple promise-based mutex to prevent concurrent refreshes
+let _refreshPromise: Promise<string | null> | null = null;
+
+/**
+ * Get a valid access token, refreshing if necessary.
+ * Uses mutex to prevent concurrent refresh attempts.
+ *
+ * This function should be called before making direct API calls
+ * to ensure the token is valid and not expired.
+ */
+export async function getValidAccessToken(): Promise<string | null> {
+  const cached = getCachedSession();
+
+  // No cached session - cannot refresh
+  if (!cached?.accessToken) {
+    console.log('[Supabase] No cached session for token validation');
+    return null;
+  }
+
+  // Token is still valid - return it immediately
+  if (!isTokenExpiringSoon(cached.accessToken)) {
+    return cached.accessToken;
+  }
+
+  // Token expiring soon - need to refresh
+  // If refresh already in progress, wait for it (mutex)
+  if (_refreshPromise) {
+    console.log('[Supabase] Token refresh in progress, waiting...');
+    return _refreshPromise;
+  }
+
+  // Start refresh with mutex
+  _refreshPromise = (async () => {
+    try {
+      console.log('[Supabase] Token expiring soon, refreshing...');
+      const supabase = getSupabase();
+      if (!supabase) {
+        console.warn('[Supabase] No client available for token refresh');
+        return cached.accessToken; // Return stale token as fallback
+      }
+
+      const {data: {session}, error} = await supabase.auth.refreshSession();
+      if (error || !session) {
+        console.error('[Supabase] Token refresh failed:', error?.message);
+        return cached.accessToken; // Return stale token as fallback
+      }
+
+      // Update cache with new token
+      setCachedSession({
+        user: {id: session.user.id},
+        access_token: session.access_token,
+      });
+
+      console.log('[Supabase] Token refreshed successfully');
+      return session.access_token;
+    } catch (err) {
+      console.error('[Supabase] Token refresh exception:', err);
+      return cached.accessToken; // Return stale token as fallback
+    } finally {
+      _refreshPromise = null; // Release mutex
+    }
+  })();
+
+  return _refreshPromise;
+}
+
 // Lazy-loaded MMKV storage adapter
 let _mmkvStorage: {
   getItem: (key: string) => string | null;
