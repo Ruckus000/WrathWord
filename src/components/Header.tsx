@@ -31,7 +31,10 @@ export default function Header({
         {onMenuPress && (
           <Pressable
             style={styles.menuBtn}
-            onPress={onMenuPress}
+            onPress={() => {
+              console.log('[Header] Settings button pressed');
+              onMenuPress();
+            }}
             accessibilityLabel="Settings"
             accessibilityRole="button">
             <Text style={styles.menuIcon}>⚙️</Text>
@@ -50,7 +53,12 @@ export default function Header({
         {onHintPress && (
           <Pressable
             style={[styles.hintBtn, hintDisabled && styles.hintBtnDisabled]}
-            onPress={hintDisabled ? undefined : onHintPress}
+            onPress={() => {
+              console.log('[Header] Hint button pressed, hintDisabled:', hintDisabled);
+              if (!hintDisabled) {
+                onHintPress();
+              }
+            }}
             disabled={hintDisabled}
             accessibilityLabel={hintDisabled ? 'Hint already used' : 'Use hint to reveal one letter'}
             accessibilityRole="button"
@@ -58,7 +66,10 @@ export default function Header({
             <Text style={styles.hintIcon}>💡</Text>
           </Pressable>
         )}
-        <Pressable onPress={onNewGamePress}>
+        <Pressable onPress={() => {
+          console.log('[Header] New button pressed');
+          onNewGamePress();
+        }}>
           <LinearGradient
             colors={[palette.gradientStart, palette.gradientEnd]}
             start={{x: 0, y: 0}}
@@ -142,7 +153,7 @@ const styles = StyleSheet.create({
     right: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 16,
   },
   newGameBtn: {
     paddingVertical: 8,

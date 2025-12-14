@@ -71,7 +71,7 @@ class MockAuthService implements IAuthService {
     await new Promise(resolve => setTimeout(resolve, 500));
 
     // Check if there's an existing mock session
-    let session = getJSON<AuthSession>(MOCK_SESSION_KEY, null);
+    let session = getJSON<AuthSession | null>(MOCK_SESSION_KEY, null);
 
     if (!session) {
       // Create new mock session
@@ -100,13 +100,13 @@ class MockAuthService implements IAuthService {
   }
 
   async getCurrentUser(): Promise<AuthUser | null> {
-    const session = getJSON<AuthSession>(MOCK_SESSION_KEY, null);
+    const session = getJSON<AuthSession | null>(MOCK_SESSION_KEY, null);
     return session?.user || null;
   }
 
   async getSession(): Promise<AuthSession | null> {
     // In dev mode, always return a mock session (auto-login)
-    let session = getJSON<AuthSession>(MOCK_SESSION_KEY, null);
+    let session = getJSON<AuthSession | null>(MOCK_SESSION_KEY, null);
 
     if (!session) {
       // Auto-create session for dev mode
@@ -125,7 +125,7 @@ class MockAuthService implements IAuthService {
     this.authStateCallbacks.push(callback);
 
     // Immediately call with current session
-    const session = getJSON<AuthSession>(MOCK_SESSION_KEY, null);
+    const session = getJSON<AuthSession | null>(MOCK_SESSION_KEY, null);
     callback(session);
 
     // Return unsubscribe function

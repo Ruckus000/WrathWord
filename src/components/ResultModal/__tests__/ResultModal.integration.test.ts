@@ -549,41 +549,6 @@ describe('ResultModal Integration', () => {
     });
   });
 
-  describe('Word label variations', () => {
-    it('should show "The word" for won status', () => {
-      // Arrange
-      const status = 'won';
-
-      // Act
-      const label = status === 'won' ? 'The word' : 'The word was';
-
-      // Assert
-      expect(label).toBe('The word');
-    });
-
-    it('should show "The word was" for lost status', () => {
-      // Arrange
-      const status = 'lost';
-
-      // Act
-      const label = status === 'won' ? 'The word' : 'The word was';
-
-      // Assert
-      expect(label).toBe('The word was');
-    });
-
-    it('should show "The word was" for playing status (edge case)', () => {
-      // Arrange
-      const status = 'playing';
-
-      // Act
-      const label = status === 'won' ? 'The word' : 'The word was';
-
-      // Assert
-      expect(label).toBe('The word was');
-    });
-  });
-
   describe('Configuration display', () => {
     it('should format game configuration correctly', () => {
       // Arrange

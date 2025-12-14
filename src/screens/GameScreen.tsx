@@ -59,9 +59,19 @@ type GameStatus = 'playing' | 'won' | 'lost';
 
 type Props = {
   onNavigateToStats?: () => void;
+  /**
+   * Controls startup behavior when coming from HomeScreen:
+   * - 'daily': Start a fresh daily game
+   * - 'free': Open NewGameModal for free play configuration
+   * - null/undefined: Restore from storage (existing behavior)
+   */
+  initialMode?: 'daily' | 'free' | null;
 };
 
-export default function GameScreen({onNavigateToStats}: Props) {
+export default function GameScreen({
+  onNavigateToStats,
+  initialMode,
+}: Props) {
   const insets = useSafeAreaInsets();
   const [length, setLength] = useState<number>(getJSON('settings.length', 5));
   const [maxRows, setMaxRows] = useState<number>(getJSON('settings.maxRows', 6));
@@ -76,6 +86,14 @@ export default function GameScreen({onNavigateToStats}: Props) {
   // Only show the New Game sheet on true first launch
   const firstLaunchRef = useRef(getJSON('app.hasLaunched', false) === false);
   const [showSettings, setShowSettings] = useState(firstLaunchRef.current);
+
+  // Removed noisy debug log that printed on every render
+
+  // Log initial flags only when visibility changes to avoid spam
+  useEffect(() => {
+    console.log('[GameScreen] firstLaunch:', firstLaunchRef.current, 'showSettings:', showSettings);
+  }, [showSettings]);
+
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [playAgainIsFreeMode, setPlayAgainIsFreeMode] = useState(false);
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -261,6 +279,34 @@ export default function GameScreen({onNavigateToStats}: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Handle initialMode from HomeScreen navigation
+  // This runs after the main init effect and overrides behavior when coming from HomeScreen
+  const initialModeHandled = useRef(false);
+  useEffect(() => {
+    // Only handle once per mount, and only if initialMode is explicitly set
+    if (initialModeHandled.current || initialMode === undefined) {
+      return;
+    }
+
+    initialModeHandled.current = true;
+
+    if (initialMode === 'daily') {
+      // Start fresh daily game with default settings
+      const today = new Date().toISOString().slice(0, 10);
+      setLength(5);
+      setMaxRows(6);
+      setMode('daily');
+      setShowSettings(false);
+      setJSON('app.hasLaunched', true);
+      loadNew(today, 'daily', 5, 6);
+    } else if (initialMode === 'free') {
+      // Open NewGameModal for free play configuration
+      setShowSettings(true);
+      setMode('free');
+    }
+    // If initialMode is null, let normal restoration happen (already handled by main init)
+  }, [initialMode, loadNew]);
+
   // Update playAgainIsFreeMode when game ends (for dynamic button text)
   useEffect(() => {
     if (status === 'won' || status === 'lost') {
@@ -268,11 +314,20 @@ export default function GameScreen({onNavigateToStats}: Props) {
     }
   }, [status, mode]);
 
-  // Refresh tile colors when component re-renders (e.g., returning from Settings)
-  // This ensures High Contrast changes take effect immediately
+  // Refresh tile colors safely without causing a render loop.
+  // Only update state if values actually changed.
   useEffect(() => {
     const newColors = getTileColors();
-    setTileColors(newColors);
+    setTileColors(prev => {
+      if (
+        prev.correct === newColors.correct &&
+        prev.present === newColors.present &&
+        prev.absent === newColors.absent
+      ) {
+        return prev; // no-op, prevents rerender loop
+      }
+      return newColors;
+    });
   });
 
   const showError = useCallback((msg: string) => {
@@ -453,6 +508,7 @@ export default function GameScreen({onNavigateToStats}: Props) {
   }, [feedback, rows, hintedLetter]);
 
   const handleNewGame = useCallback(() => {
+    console.log('[GameScreen] handleNewGame called, setting showSettings=true');
     setShowSettings(true);
   }, []);
 
@@ -504,6 +560,9 @@ export default function GameScreen({onNavigateToStats}: Props) {
   }, [feedback, length, status]);
 
   const hintDisabled = hintUsed || status !== 'playing' || allPositionsCorrect;
+
+  // DEBUG: Log hint state
+  console.log('[GameScreen] hintDisabled:', hintDisabled, '| hintUsed:', hintUsed, '| status:', status, '| allPositionsCorrect:', allPositionsCorrect);
 
   // Hint handler
   const handleHint = useCallback(() => {
