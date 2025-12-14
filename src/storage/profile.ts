@@ -51,7 +51,7 @@ function generateUUID(): string {
 }
 
 // Initialize empty stats for a word length
-function initLengthStats(): LengthStats {
+export function initLengthStats(): LengthStats {
   return {
     gamesPlayed: 0,
     gamesWon: 0,

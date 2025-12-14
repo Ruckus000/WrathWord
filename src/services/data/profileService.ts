@@ -215,6 +215,11 @@ class SupabaseProfileService implements IProfileService {
         gamesWon: stats.gamesWon,
       });
 
+      // Warn if lastPlayedDate is empty string (helps trace data corruption source)
+      if (stats.lastPlayedDate === '') {
+        console.warn(`[ProfileService] Empty lastPlayedDate for length ${length} - source needs investigation`);
+      }
+
       // Use directUpsert with timeout (avoids Supabase JS client pipeline)
       const {error} = await directUpsert(
         'game_stats',
@@ -228,7 +233,7 @@ class SupabaseProfileService implements IProfileService {
           guess_distribution: stats.guessDistribution,
           used_words: stats.usedWords,
           current_cycle: stats.currentCycle,
-          last_played_date: stats.lastPlayedDate,
+          last_played_date: stats.lastPlayedDate || null, // PostgreSQL rejects "" for date columns
           updated_at: new Date().toISOString(),
         },
         token,
