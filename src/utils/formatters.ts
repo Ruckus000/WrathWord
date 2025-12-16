@@ -1,6 +1,14 @@
 // src/utils/formatters.ts
 
 /**
+ * Get current UTC date as ISO string (YYYY-MM-DD)
+ * Consistent with existing date handling throughout the app
+ */
+export function getUTCDateString(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
  * Returns the ordinal string for a number (1st, 2nd, 3rd, etc.)
  * @param n - The number to convert to ordinal
  * @returns The ordinal string (e.g., "1st", "2nd", "3rd", "4th")
