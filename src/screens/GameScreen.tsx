@@ -15,8 +15,10 @@ import {
   StyleSheet,
   AccessibilityInfo,
   Animated,
+  Modal,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useToday} from '../hooks/useToday';
 import {triggerImpact, triggerNotification} from '../utils/haptics';
 import {getOrdinal} from '../utils/formatters';
 import {evaluateGuess, TileState} from '../logic/evaluateGuess';
@@ -102,6 +104,11 @@ export default function GameScreen({
   const [hintUsed, setHintUsed] = useState<boolean>(false);
   const [hintedCell, setHintedCell] = useState<{row: number; col: number} | null>(null);
   const [hintedLetter, setHintedLetter] = useState<string | null>(null);
+
+  // Stale game detection - shows modal when playing yesterday's puzzle
+  const today = useToday();
+  const [staleGameWarning, setStaleGameWarning] = useState(false);
+  const warnedForDateRef = useRef<string | null>(null);
 
   // Track tile colors for reactivity when preferences change
   const [tileColors, setTileColors] = useState(getTileColors());
@@ -507,6 +514,42 @@ export default function GameScreen({
     return map;
   }, [feedback, rows, hintedLetter]);
 
+  // Detect stale daily game - compare session date directly
+  useEffect(() => {
+    // Skip if: no session, not daily mode, or game already finished
+    if (!dateISO || mode !== 'daily' || status !== 'playing') {
+      return;
+    }
+
+    // Check if playing a stale puzzle from a previous day
+    // Only warn once per stale dateISO (prevents modal re-triggering after dismissal)
+    if (dateISO !== today && warnedForDateRef.current !== dateISO) {
+      if (rows.length > 0) {
+        // Has progress - ask user what to do (mark as warned first)
+        warnedForDateRef.current = dateISO;
+        setStaleGameWarning(true);
+      } else {
+        // No progress - silently start today's puzzle
+        loadNew(today, 'daily', length, maxRows);
+      }
+    }
+  }, [today, dateISO, mode, status, rows.length, length, maxRows, loadNew]);
+
+  // Handler for starting today's puzzle
+  const handleStartTodaysPuzzle = useCallback(() => {
+    setStaleGameWarning(false);
+    warnedForDateRef.current = null; // Reset for future stale sessions
+    loadNew(today, 'daily', length, maxRows);
+  }, [today, length, maxRows, loadNew]);
+
+  // Handler for continuing stale game
+  const handleFinishCurrentGame = useCallback(() => {
+    setStaleGameWarning(false);
+    // warnedForDateRef stays set - prevents re-triggering
+    // User continues playing the stale game
+    // When they complete it, stats record with original dateISO (yesterday)
+  }, []);
+
   const handleNewGame = useCallback(() => {
     console.log('[GameScreen] handleNewGame called, setting showSettings=true');
     setShowSettings(true);
@@ -698,6 +741,40 @@ export default function GameScreen({
         onGiveUp={handleGiveUp}
       />
 
+      {/* Stale game warning modal */}
+      <Modal
+        visible={staleGameWarning}
+        transparent
+        animationType="fade"
+        onRequestClose={handleFinishCurrentGame}
+      >
+        <View style={styles.staleGameOverlay}>
+          <View style={styles.staleGameCard}>
+            <Text style={styles.staleGameTitle}>New Day!</Text>
+            <Text style={styles.staleGameText}>
+              A new daily puzzle is available. Would you like to finish your
+              current game or start today's puzzle?
+            </Text>
+            <Pressable
+              style={styles.staleGameButton}
+              onPress={handleStartTodaysPuzzle}
+            >
+              <Text style={styles.staleGameButtonText}>
+                Start Today's Puzzle
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.staleGameButtonSecondary}
+              onPress={handleFinishCurrentGame}
+            >
+              <Text style={styles.staleGameButtonTextSecondary}>
+                Finish Current Game
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       {/* Result modal */}
       <ResultModal
         visible={showResult}
@@ -803,5 +880,61 @@ const styles = StyleSheet.create({
     color: '#ff453a',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Stale game warning modal styles
+  staleGameOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  staleGameCard: {
+    backgroundColor: palette.bg,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
+  staleGameTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#e4e4e7',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  staleGameText: {
+    fontSize: 15,
+    color: '#a1a1aa',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  staleGameButton: {
+    backgroundColor: '#22c55e',
+    paddingVertical: 14,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  staleGameButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  staleGameButtonSecondary: {
+    backgroundColor: 'transparent',
+    paddingVertical: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#3f3f46',
+  },
+  staleGameButtonTextSecondary: {
+    color: '#a1a1aa',
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });

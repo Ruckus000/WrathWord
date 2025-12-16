@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1765668280306" clover="3.2.0">
+  <project timestamp="1765668280306" name="All files">
+    <metrics statements="17" coveredstatements="17" conditionals="10" coveredconditionals="10" methods="4" coveredmethods="4" elements="31" coveredelements="31" complexity="0" loc="17" ncloc="17" packages="1" files="1" classes="1"/>
+    <file name="homeService.ts" path="/Users/jphilistin/Documents/Coding/WrathWord/src/services/data/homeService.ts">
+      <metrics statements="17" coveredstatements="17" conditionals="10" coveredconditionals="10" methods="4" coveredmethods="4"/>
+      <line num="16" count="1" type="stmt"/>
+      <line num="41" count="22" type="stmt"/>
+      <line num="42" count="22" type="cond" truecount="2" falsecount="0"/>
+      <line num="50" count="7" type="stmt"/>
+      <line num="51" count="7" type="stmt"/>
+      <line num="53" count="7" type="cond" truecount="2" falsecount="0"/>
+      <line num="54" count="1" type="stmt"/>
+      <line num="57" count="6" type="stmt"/>
+      <line num="72" count="13" type="stmt"/>
+      <line num="73" count="13" type="stmt"/>
+      <line num="86" count="11" type="stmt"/>
+      <line num="95" count="11" type="stmt"/>
+      <line num="96" count="11" type="stmt"/>
+      <line num="106" count="1" type="stmt"/>
+      <line num="110" count="11" type="cond" truecount="2" falsecount="0"/>
+      <line num="111" count="9" type="stmt"/>
+      <line num="119" count="11" type="stmt"/>
+    </file>
+  </project>
+</coverage>
