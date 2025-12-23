@@ -12,3 +12,10 @@ android/app/build/
 .idea/
 *.xcuserstate
 *.xcuserdatad/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
