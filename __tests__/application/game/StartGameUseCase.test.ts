@@ -1,14 +1,14 @@
-// __tests__/domain/game/usecases/StartGameUseCase.test.ts
+// __tests__/application/game/StartGameUseCase.test.ts
 
-import { StartGameUseCase, StartGameResult } from '../../../../src/domain/game/usecases/StartGameUseCase';
-import { GameSession } from '../../../../src/domain/game/entities/GameSession';
-import { GameConfig, ValidLength, GameMode } from '../../../../src/domain/game/value-objects/GameConfig';
-import { GuessEvaluator } from '../../../../src/domain/game/services/GuessEvaluator';
-import { WordSelector } from '../../../../src/domain/game/services/WordSelector';
-import { IWordList } from '../../../../src/domain/game/repositories/IWordList';
-import { IGameRepository, PersistedGameState } from '../../../../src/domain/game/repositories/IGameRepository';
-import { ICompletionRepository } from '../../../../src/domain/game/repositories/ICompletionRepository';
-import { TileStateValue } from '../../../../src/domain/game/value-objects/TileState';
+import { StartGameUseCase, StartGameResult } from '../../../src/application/game/StartGameUseCase';
+import { GameSession } from '../../../src/domain/game/entities/GameSession';
+import { GameConfig, ValidLength, GameMode } from '../../../src/domain/game/value-objects/GameConfig';
+import { GuessEvaluator } from '../../../src/domain/game/services/GuessEvaluator';
+import { WordSelector } from '../../../src/domain/game/services/WordSelector';
+import { IWordList } from '../../../src/domain/game/repositories/IWordList';
+import { IGameRepository, PersistedGameState } from '../../../src/domain/game/repositories/IGameRepository';
+import { ICompletionRepository } from '../../../src/domain/game/repositories/ICompletionRepository';
+import { TileStateValue } from '../../../src/domain/game/value-objects/TileState';
 
 describe('StartGameUseCase', () => {
   // Mock implementations
@@ -49,25 +49,26 @@ describe('StartGameUseCase', () => {
   }
 
   class MockCompletionRepository implements ICompletionRepository {
-    private completed = new Map<string, Set<ValidLength>>();
+    private completed = new Map<string, boolean>();
 
-    isDailyCompleted(dateISO: string, length: ValidLength): boolean {
-      return this.completed.get(dateISO)?.has(length) ?? false;
+    private makeKey(length: ValidLength, maxRows: number, dateISO: string): string {
+      return `${length}:${maxRows}:${dateISO}`;
     }
 
-    markDailyCompleted(dateISO: string, length: ValidLength): void {
-      if (!this.completed.has(dateISO)) {
-        this.completed.set(dateISO, new Set());
-      }
-      this.completed.get(dateISO)!.add(length);
+    isDailyCompleted(length: ValidLength, maxRows: number, dateISO: string): boolean {
+      return this.completed.get(this.makeKey(length, maxRows, dateISO)) ?? false;
+    }
+
+    markDailyCompleted(length: ValidLength, maxRows: number, dateISO: string): void {
+      this.completed.set(this.makeKey(length, maxRows, dateISO), true);
     }
 
     getCompletedDates(length: ValidLength): string[] {
       return [];
     }
 
-    clearCompletion(dateISO: string, length: ValidLength): void {
-      this.completed.get(dateISO)?.delete(length);
+    clearCompletion(length: ValidLength, maxRows: number, dateISO: string): void {
+      this.completed.delete(this.makeKey(length, maxRows, dateISO));
     }
   }
 
@@ -250,7 +251,7 @@ describe('StartGameUseCase', () => {
 
   describe('already completed daily', () => {
     it('indicates when daily is already completed', () => {
-      completionRepo.markDailyCompleted(today, 5);
+      completionRepo.markDailyCompleted(5, 6, today);
 
       const config = GameConfig.create({ length: 5, maxRows: 6, mode: 'daily', dateISO: today });
       const result = useCase.execute(config);
@@ -259,7 +260,7 @@ describe('StartGameUseCase', () => {
     });
 
     it('allows starting free play even if daily is completed', () => {
-      completionRepo.markDailyCompleted(today, 5);
+      completionRepo.markDailyCompleted(5, 6, today);
 
       const config = GameConfig.create({ length: 5, maxRows: 6, mode: 'free', dateISO: today });
       const result = useCase.execute(config);

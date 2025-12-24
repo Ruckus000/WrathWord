@@ -1,12 +1,12 @@
-// __tests__/domain/game/usecases/SubmitGuessUseCase.test.ts
+// __tests__/application/game/SubmitGuessUseCase.test.ts
 
-import { SubmitGuessUseCase, SubmitGuessResult, SubmitGuessError } from '../../../../src/domain/game/usecases/SubmitGuessUseCase';
-import { GameSession } from '../../../../src/domain/game/entities/GameSession';
-import { GameConfig, ValidLength } from '../../../../src/domain/game/value-objects/GameConfig';
-import { GuessEvaluator } from '../../../../src/domain/game/services/GuessEvaluator';
-import { IWordList } from '../../../../src/domain/game/repositories/IWordList';
-import { IGameRepository, PersistedGameState } from '../../../../src/domain/game/repositories/IGameRepository';
-import { ICompletionRepository } from '../../../../src/domain/game/repositories/ICompletionRepository';
+import { SubmitGuessUseCase, SubmitGuessResult, SubmitGuessError } from '../../../src/application/game/SubmitGuessUseCase';
+import { GameSession } from '../../../src/domain/game/entities/GameSession';
+import { GameConfig, ValidLength } from '../../../src/domain/game/value-objects/GameConfig';
+import { GuessEvaluator } from '../../../src/domain/game/services/GuessEvaluator';
+import { IWordList } from '../../../src/domain/game/repositories/IWordList';
+import { IGameRepository, PersistedGameState } from '../../../src/domain/game/repositories/IGameRepository';
+import { ICompletionRepository } from '../../../src/domain/game/repositories/ICompletionRepository';
 
 describe('SubmitGuessUseCase', () => {
   // Mock implementations
@@ -47,27 +47,26 @@ describe('SubmitGuessUseCase', () => {
   }
 
   class MockCompletionRepository implements ICompletionRepository {
-    private completed = new Map<string, Set<ValidLength>>();
+    private completed = new Map<string, boolean>();
 
-    isDailyCompleted(dateISO: string, length: ValidLength): boolean {
-      return this.completed.get(dateISO)?.has(length) ?? false;
+    private makeKey(length: ValidLength, maxRows: number, dateISO: string): string {
+      return `${length}:${maxRows}:${dateISO}`;
     }
 
-    markDailyCompleted(dateISO: string, length: ValidLength): void {
-      if (!this.completed.has(dateISO)) {
-        this.completed.set(dateISO, new Set());
-      }
-      this.completed.get(dateISO)!.add(length);
+    isDailyCompleted(length: ValidLength, maxRows: number, dateISO: string): boolean {
+      return this.completed.get(this.makeKey(length, maxRows, dateISO)) ?? false;
+    }
+
+    markDailyCompleted(length: ValidLength, maxRows: number, dateISO: string): void {
+      this.completed.set(this.makeKey(length, maxRows, dateISO), true);
     }
 
     getCompletedDates(length: ValidLength): string[] {
-      return Array.from(this.completed.entries())
-        .filter(([_, lengths]) => lengths.has(length))
-        .map(([date]) => date);
+      return [];
     }
 
-    clearCompletion(dateISO: string, length: ValidLength): void {
-      this.completed.get(dateISO)?.delete(length);
+    clearCompletion(length: ValidLength, maxRows: number, dateISO: string): void {
+      this.completed.delete(this.makeKey(length, maxRows, dateISO));
     }
   }
 
@@ -182,7 +181,7 @@ describe('SubmitGuessUseCase', () => {
       const session = createTestSession('HELLO');
       useCase.execute(session, 'HELLO');
 
-      expect(completionRepo.isDailyCompleted('2025-01-15', 5)).toBe(true);
+      expect(completionRepo.isDailyCompleted(5, 6, '2025-01-15')).toBe(true);
     });
 
     it('marks daily as completed on loss', () => {
@@ -199,7 +198,7 @@ describe('SubmitGuessUseCase', () => {
       // 6th guess (loss)
       useCase.execute(session, 'WORLD');
 
-      expect(completionRepo.isDailyCompleted('2025-01-15', 5)).toBe(true);
+      expect(completionRepo.isDailyCompleted(5, 6, '2025-01-15')).toBe(true);
     });
 
     it('does not mark completion for free play mode', () => {
@@ -208,14 +207,14 @@ describe('SubmitGuessUseCase', () => {
 
       useCase.execute(session, 'HELLO');
 
-      expect(completionRepo.isDailyCompleted('2025-01-15', 5)).toBe(false);
+      expect(completionRepo.isDailyCompleted(5, 6, '2025-01-15')).toBe(false);
     });
 
     it('does not mark completion on intermediate guess', () => {
       const session = createTestSession();
       useCase.execute(session, 'CRANE');
 
-      expect(completionRepo.isDailyCompleted('2025-01-15', 5)).toBe(false);
+      expect(completionRepo.isDailyCompleted(5, 6, '2025-01-15')).toBe(false);
     });
   });
 

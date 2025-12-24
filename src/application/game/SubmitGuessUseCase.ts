@@ -1,10 +1,10 @@
-// src/domain/game/usecases/SubmitGuessUseCase.ts
+// src/application/game/SubmitGuessUseCase.ts
 
-import { GameSession } from '../entities/GameSession';
-import { IWordList } from '../repositories/IWordList';
-import { IGameRepository, PersistedGameState } from '../repositories/IGameRepository';
-import { ICompletionRepository } from '../repositories/ICompletionRepository';
-import { ValidLength } from '../value-objects/GameConfig';
+import { GameSession } from '../../domain/game/entities/GameSession';
+import { IWordList } from '../../domain/game/repositories/IWordList';
+import { IGameRepository, PersistedGameState } from '../../domain/game/repositories/IGameRepository';
+import { ICompletionRepository } from '../../domain/game/repositories/ICompletionRepository';
+import { ValidLength } from '../../domain/game/value-objects/GameConfig';
 
 export type SubmitGuessError =
   | 'invalid_length'
@@ -74,8 +74,9 @@ export class SubmitGuessUseCase {
 
     if (newSession.isGameOver() && newSession.config.isDaily()) {
       this.completionRepository.markDailyCompleted(
-        newSession.config.dateISO,
         newSession.config.length,
+        newSession.config.maxRows,
+        newSession.config.dateISO,
       );
     }
 

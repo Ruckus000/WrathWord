@@ -1,14 +1,14 @@
-// src/domain/game/usecases/StartGameUseCase.ts
+// src/application/game/StartGameUseCase.ts
 
-import { GameSession, HintCell } from '../entities/GameSession';
-import { GameConfig, ValidLength } from '../value-objects/GameConfig';
-import { Feedback } from '../value-objects/Feedback';
-import { TileStateValue } from '../value-objects/TileState';
-import { GuessEvaluator } from '../services/GuessEvaluator';
-import { WordSelector } from '../services/WordSelector';
-import { IWordList } from '../repositories/IWordList';
-import { IGameRepository, PersistedGameState } from '../repositories/IGameRepository';
-import { ICompletionRepository } from '../repositories/ICompletionRepository';
+import { GameSession, HintCell } from '../../domain/game/entities/GameSession';
+import { GameConfig, ValidLength } from '../../domain/game/value-objects/GameConfig';
+import { Feedback } from '../../domain/game/value-objects/Feedback';
+import { TileStateValue } from '../../domain/game/value-objects/TileState';
+import { GuessEvaluator } from '../../domain/game/services/GuessEvaluator';
+import { WordSelector } from '../../domain/game/services/WordSelector';
+import { IWordList } from '../../domain/game/repositories/IWordList';
+import { IGameRepository, PersistedGameState } from '../../domain/game/repositories/IGameRepository';
+import { ICompletionRepository } from '../../domain/game/repositories/ICompletionRepository';
 
 export type StartGameResult =
   | { type: 'new_game'; session: GameSession }
@@ -42,7 +42,7 @@ export class StartGameUseCase {
    */
   execute(config: GameConfig): StartGameResult {
     // Check if daily is already completed
-    if (config.isDaily() && this.completionRepository.isDailyCompleted(config.dateISO, config.length)) {
+    if (config.isDaily() && this.completionRepository.isDailyCompleted(config.length, config.maxRows, config.dateISO)) {
       return { type: 'already_completed' };
     }
 
