@@ -13,6 +13,7 @@ import {
   AuthResult,
 } from './types';
 import {getFriendCode} from '../../storage/friendCode';
+import {logger} from '../../utils/logger';
 
 class SupabaseAuthService implements IAuthService {
   private authStateCallbacks: Array<(session: AuthSession | null) => void> = [];
@@ -100,11 +101,11 @@ class SupabaseAuthService implements IAuthService {
     email: string,
     password: string,
   ): Promise<AuthResult<AuthSession>> {
-    console.log('[Auth] signIn() called');
+    logger.log('[Auth] signIn() called');
     const supabase = getSupabase();
 
     if (!supabase) {
-      console.log('[Auth] No Supabase client - returning error');
+      logger.log('[Auth] No Supabase client - returning error');
       return {
         data: null,
         error: {message: 'Supabase not configured', code: 'NO_SUPABASE'},
@@ -112,13 +113,13 @@ class SupabaseAuthService implements IAuthService {
     }
 
     try {
-      console.log('[Auth] Calling signInWithPassword...');
+      logger.log('[Auth] Calling signInWithPassword...');
       const {data: authData, error: authError} =
         await supabase.auth.signInWithPassword({
           email,
           password,
         });
-      console.log(
+      logger.log(
         '[Auth] signInWithPassword returned',
         authError ? 'error: ' + authError.message : 'success',
       );
@@ -135,13 +136,13 @@ class SupabaseAuthService implements IAuthService {
       }
 
       // Get user profile
-      console.log('[Auth] Fetching user profile...');
+      logger.log('[Auth] Fetching user profile...');
       const {data: profile} = await supabase
         .from('profiles')
         .select('username, display_name, friend_code')
         .eq('user_id', authData.user.id)
         .single();
-      console.log('[Auth] Profile fetched:', profile?.username);
+      logger.log('[Auth] Profile fetched:', profile?.username);
 
       const session: AuthSession = {
         user: {
@@ -165,7 +166,7 @@ class SupabaseAuthService implements IAuthService {
       }
 
       // Notify all registered listeners (like mockAuthService does)
-      console.log(
+      logger.log(
         '[Auth] signIn success, notifying',
         this.authStateCallbacks.length,
         'callbacks',
@@ -174,7 +175,7 @@ class SupabaseAuthService implements IAuthService {
 
       return {data: session, error: null};
     } catch (err) {
-      console.log('[Auth] signIn caught error:', err);
+      logger.log('[Auth] signIn caught error:', err);
       return {
         data: null,
         error: {message: err instanceof Error ? err.message : 'Unknown error'},
@@ -250,29 +251,29 @@ class SupabaseAuthService implements IAuthService {
   async getSession(): Promise<AuthSession | null> {
     const supabase = getSupabase();
     if (!supabase) {
-      console.log('[Auth] Supabase not configured');
+      logger.log('[Auth] Supabase not configured');
       return null;
     }
 
     try {
-      console.log('[Auth] Getting session...');
+      logger.log('[Auth] Getting session...');
       const {
         data: {session},
       } = await supabase.auth.getSession();
 
       if (!session) {
-        console.log('[Auth] No session found');
+        logger.log('[Auth] No session found');
         return null;
       }
 
-      console.log('[Auth] Session found, fetching profile...');
+      logger.log('[Auth] Session found, fetching profile...');
       // Get user profile
       const {data: profile} = await supabase
         .from('profiles')
         .select('username, display_name, friend_code')
         .eq('user_id', session.user.id)
         .single();
-      console.log('[Auth] Profile fetched:', profile?.username);
+      logger.log('[Auth] Profile fetched:', profile?.username);
 
       return {
         user: {
@@ -294,17 +295,17 @@ class SupabaseAuthService implements IAuthService {
   onAuthStateChange(
     callback: (session: AuthSession | null) => void,
   ): () => void {
-    console.log('[Auth] onAuthStateChange() called');
+    logger.log('[Auth] onAuthStateChange() called');
     const supabase = getSupabase();
 
     if (!supabase) {
-      console.log('[Auth] WARNING: Not registering callback - Supabase is null');
+      logger.log('[Auth] WARNING: Not registering callback - Supabase is null');
       return () => {};
     }
 
     // Store callback locally (like mockAuthService does)
     this.authStateCallbacks.push(callback);
-    console.log(
+    logger.log(
       '[Auth] Callback registered, total:',
       this.authStateCallbacks.length,
     );
@@ -318,7 +319,7 @@ class SupabaseAuthService implements IAuthService {
     const {
       data: {subscription},
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Auth] NATIVE onAuthStateChange fired:', event, !!session);
+      logger.log('[Auth] NATIVE onAuthStateChange fired:', event, !!session);
 
       // Cache session for sync access by other services (handles TOKEN_REFRESHED too)
       setCachedSession(
@@ -337,7 +338,7 @@ class SupabaseAuthService implements IAuthService {
 
       // IMPORTANT: Call callback IMMEDIATELY with basic session info
       // Don't wait for profile fetch - it might hang and block navigation
-      console.log('[Auth] Calling callback immediately with basic session');
+      logger.log('[Auth] Calling callback immediately with basic session');
       callback({
         user: {
           id: session.user.id,
@@ -357,7 +358,7 @@ class SupabaseAuthService implements IAuthService {
           .single();
 
         if (profile) {
-          console.log('[Auth] Profile fetched, updating session');
+          logger.log('[Auth] Profile fetched, updating session');
           callback({
             user: {
               id: session.user.id,
@@ -372,7 +373,7 @@ class SupabaseAuthService implements IAuthService {
           });
         }
       } catch (error) {
-        console.error('[Auth] Profile fetch failed (non-blocking):', error);
+        logger.error('[Auth] Profile fetch failed (non-blocking):', error);
       }
     });
 

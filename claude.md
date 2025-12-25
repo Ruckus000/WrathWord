@@ -2,6 +2,21 @@
 
 React Native word puzzle game (iOS-focused) with Supabase backend.
 
+---
+
+## 🚨 ACTIVE REFACTORING IN PROGRESS
+
+**If you're here to continue the TDD refactoring, read `.claude/refactor/REFACTOR_RUNNER.md` first.**
+
+Quick start for refactoring:
+```
+Read .claude/refactor/REFACTOR_PROGRESS.md to find the current task,
+then read the corresponding task file in .claude/refactor/tasks/
+and execute it following the test-first protocol.
+```
+
+---
+
 ## Commands
 
 ```bash
@@ -9,7 +24,9 @@ npm start                    # Start Metro bundler
 npm start --reset-cache      # Clear cache (use after mode switch)
 npm run ios                  # Run iOS simulator
 cd ios && pod install        # Install iOS dependencies
-npx react-native clean       # Clean build artifacts
+npm test                     # Run all tests
+npm test -- --testPathPattern="<pattern>"  # Run specific tests
+npx tsc --noEmit             # Type check
 ```
 
 ## Code Style
@@ -38,33 +55,12 @@ export const isDevelopment = false // Prod: real Supabase, auth required
 
 **After changing**: Must run `npm start --reset-cache` and rebuild.
 
-**Never ship with wrong mode** - verify before release builds.
-
 ## Database
 
 ### Key Tables
 - `profiles`: user_id, display_name, friend_code (XXXX-XXXX format)
 - `game_stats`: user_id, word_length (2-6), mode, won, guesses, date_played
 - `friendships`: user_id, friend_id, status (pending/accepted)
-
-### RLS Behavior
-- RLS returns **empty results** for unauthorized access (not errors)
-- Query hangs = network/session issue, not RLS
-
-## Known Issues & Workarounds
-
-### Session Hangs
-`supabase.auth.getSession()` can hang indefinitely. Use cached session pattern:
-```typescript
-// Use directInsert/directUpsert with raw fetch + AbortController timeout
-// See src/services/data/gameResultsService.ts for implementation
-```
-
-### Empty Leaderboards
-Historical local games don't auto-sync. Sync-on-login needed to push MMKV data.
-
-### Auth Callback Deadlocks
-Never call async Supabase methods inside `onAuthStateChange()` callbacks.
 
 ## Game Logic
 
@@ -74,18 +70,33 @@ Two-pass evaluation:
 2. Pass 2: Mark present (yellow) only if letter count > 0
 
 ### Daily Word Selection
-Deterministic via `seededIndex(\`${dateISO}:${len}\`, answers.length)` using FNV-1a + Mulberry32.
+**CRITICAL**: `selectDaily(len, maxRows, dateISO, answers)` - maxRows is part of the seed!
 
 ## File Locations
 
 | Purpose | Location |
 |---------|----------|
 | Mode config | `src/config/environment.ts` |
+| Game config | `src/config/gameConfig.ts` (VALID_LENGTHS, etc.) |
 | Services | `src/services/data/`, `src/services/auth/` |
 | Game logic | `src/logic/evaluateGuess.ts`, `src/logic/selectDaily.ts` |
 | Word lists | `src/logic/words/answers-*.json`, `allowed-*.json` |
 | Local storage | `src/storage/mmkv.ts` |
-| Mock data (dev) | `src/data/mock*.ts` |
+| User scoping | `src/storage/userScope.ts` (getScopedKey) |
+
+## Testing
+
+```bash
+npm test                                    # All tests
+npm test -- --testPathPattern="<pattern>"   # Specific tests
+npm test -- --coverage                      # With coverage
+```
+
+### Test Locations
+- Domain tests: `__tests__/domain/`
+- Characterization tests: `__tests__/characterization/`
+- Component tests: `src/components/X/__tests__/`
+- Hook tests: `src/hooks/__tests__/`
 
 ## Don'ts
 
@@ -94,13 +105,3 @@ Deterministic via `seededIndex(\`${dateISO}:${len}\`, answers.length)` using FNV
 - Don't log auth tokens, session data, or user credentials
 - Don't use `new MMKV()` - use `createMMKV()`
 - Don't call async in `onAuthStateChange` callbacks
-- Don't assume RLS errors = query will fail (they return empty)
-
-## Testing Checklist
-
-Before PR:
-- [ ] Works in dev mode (isDevelopment = true)
-- [ ] Works in prod mode (isDevelopment = false)
-- [ ] No TypeScript errors: `npx tsc --noEmit`
-- [ ] Game logic handles duplicate letters correctly
-- [ ] Service layer used for all data operations

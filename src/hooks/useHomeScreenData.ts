@@ -9,6 +9,7 @@
 
 import {useState, useEffect, useCallback, useMemo} from 'react';
 import {useAuth} from '../contexts/AuthContext';
+import {logger} from '../utils/logger';
 import {useUserStats} from './useUserStats';
 import {useToday} from './useToday';
 import {friendsService} from '../services/data/friendsService';
@@ -198,7 +199,7 @@ export function useHomeScreenData(): HomeScreenData {
         setGlobalUsers(globalData);
       }
     } catch (err) {
-      console.error('[useHomeScreenData] Failed to fetch:', err);
+      logger.error('[useHomeScreenData] Failed to fetch:', err);
       setError(err as Error);
     } finally {
       setIsLoading(false);

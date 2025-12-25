@@ -13,6 +13,7 @@ import 'react-native-url-polyfill/auto';
 
 import {createClient, SupabaseClient} from '@supabase/supabase-js';
 import {supabaseConfig, shouldUseSupabase} from '../../config/environment';
+import {logger} from '../../utils/logger';
 
 /**
  * Cached session for synchronous access
@@ -34,10 +35,10 @@ export function setCachedSession(
       user: {id: session.user.id},
       accessToken: session.access_token,
     };
-    console.log('[Supabase] Session cached for user:', session.user.id);
+    logger.log('[Supabase] Session cached for user:', session.user.id);
   } else {
     _cachedSession = null;
-    console.log('[Supabase] Session cache cleared');
+    logger.log('[Supabase] Session cache cleared');
   }
 }
 
@@ -71,13 +72,13 @@ function isTokenExpiringSoon(token: string, thresholdMs = 5 * 60 * 1000): boolea
 
     if (isExpiring) {
       const remainingMs = expiresAt - now;
-      console.log(`[Supabase] Token expires in ${Math.round(remainingMs / 1000)}s (threshold: ${thresholdMs / 1000}s)`);
+      logger.log(`[Supabase] Token expires in ${Math.round(remainingMs / 1000)}s (threshold: ${thresholdMs / 1000}s)`);
     }
 
     return isExpiring;
   } catch (error) {
     // If we can't parse, assume it might be expired
-    console.warn('[Supabase] Failed to parse JWT for expiry check:', error);
+    logger.warn('[Supabase] Failed to parse JWT for expiry check:', error);
     return true;
   }
 }
@@ -97,7 +98,7 @@ export async function getValidAccessToken(): Promise<string | null> {
 
   // No cached session - cannot refresh
   if (!cached?.accessToken) {
-    console.log('[Supabase] No cached session for token validation');
+    logger.log('[Supabase] No cached session for token validation');
     return null;
   }
 
@@ -109,24 +110,24 @@ export async function getValidAccessToken(): Promise<string | null> {
   // Token expiring soon - need to refresh
   // If refresh already in progress, wait for it (mutex)
   if (_refreshPromise) {
-    console.log('[Supabase] Token refresh in progress, waiting...');
+    logger.log('[Supabase] Token refresh in progress, waiting...');
     return _refreshPromise;
   }
 
   // Start refresh with mutex
   _refreshPromise = (async () => {
     try {
-      console.log('[Supabase] Token expiring soon, refreshing...');
+      logger.log('[Supabase] Token expiring soon, refreshing...');
       const supabase = getSupabase();
       if (!supabase) {
-        console.warn('[Supabase] No client available for token refresh');
-        return cached.accessToken; // Return stale token as fallback
+        logger.warn('[Supabase] No client available for token refresh');
+        return null; // Force re-auth instead of returning stale token
       }
 
       const {data: {session}, error} = await supabase.auth.refreshSession();
       if (error || !session) {
-        console.error('[Supabase] Token refresh failed:', error?.message);
-        return cached.accessToken; // Return stale token as fallback
+        logger.error('[Supabase] Token refresh failed:', error?.message);
+        return null; // Force re-auth instead of returning stale token
       }
 
       // Update cache with new token
@@ -135,11 +136,11 @@ export async function getValidAccessToken(): Promise<string | null> {
         access_token: session.access_token,
       });
 
-      console.log('[Supabase] Token refreshed successfully');
+      logger.log('[Supabase] Token refreshed successfully');
       return session.access_token;
     } catch (err) {
-      console.error('[Supabase] Token refresh exception:', err);
-      return cached.accessToken; // Return stale token as fallback
+      logger.error('[Supabase] Token refresh exception:', err);
+      return null; // Force re-auth instead of returning stale token
     } finally {
       _refreshPromise = null; // Release mutex
     }
@@ -177,18 +178,18 @@ let _initialized = false;
  * Only creates a real client if Supabase is configured
  */
 function initializeSupabase(): SupabaseClient | null {
-  console.log('[Supabase] Initializing...');
-  console.log('[Supabase] URL:', supabaseConfig.url || '(empty)');
-  console.log('[Supabase] Key present:', !!supabaseConfig.anonKey);
-  console.log('[Supabase] shouldUseSupabase:', shouldUseSupabase());
+  logger.log('[Supabase] Initializing...');
+  logger.log('[Supabase] URL:', supabaseConfig.url || '(empty)');
+  logger.log('[Supabase] Key present:', !!supabaseConfig.anonKey);
+  logger.log('[Supabase] shouldUseSupabase:', shouldUseSupabase());
 
   if (!shouldUseSupabase()) {
-    console.log('[Supabase] Skipping - dev mode or not configured');
+    logger.log('[Supabase] Skipping - dev mode or not configured');
     return null;
   }
 
   try {
-    console.log('[Supabase] Creating client...');
+    logger.log('[Supabase] Creating client...');
 
     // Create a custom fetch with timeout to prevent infinite hangs
     const fetchWithTimeout = (url: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
@@ -212,19 +213,21 @@ function initializeSupabase(): SupabaseClient | null {
         fetch: fetchWithTimeout,
       },
     });
-    console.log('[Supabase] Client created successfully');
+    logger.log('[Supabase] Client created successfully');
 
-    // DIAGNOSTIC: Test if raw fetch works
-    console.log('[Supabase] Testing raw fetch...');
-    fetch(`${supabaseConfig.url}/rest/v1/`, {
-      headers: {apikey: supabaseConfig.anonKey},
-    })
-      .then(res => console.log('[Supabase] RAW FETCH SUCCESS:', res.status))
-      .catch(err => console.log('[Supabase] RAW FETCH ERROR:', err.message));
+    // DIAGNOSTIC: Test if raw fetch works (dev only)
+    if (__DEV__) {
+      logger.log('[Supabase] Testing raw fetch...');
+      fetch(`${supabaseConfig.url}/rest/v1/`, {
+        headers: {apikey: supabaseConfig.anonKey},
+      })
+        .then(res => logger.log('[Supabase] RAW FETCH SUCCESS:', res.status))
+        .catch(err => logger.log('[Supabase] RAW FETCH ERROR:', err.message));
+    }
 
     return client;
   } catch (error) {
-    console.error('[Supabase] Failed to create client:', error);
+    logger.error('[Supabase] Failed to create client:', error);
     return null;
   }
 }
@@ -235,7 +238,7 @@ function initializeSupabase(): SupabaseClient | null {
  */
 export function getSupabase(): SupabaseClient | null {
   if (!_initialized) {
-    console.log('[Supabase] getSupabase: First call, initializing...');
+    logger.log('[Supabase] getSupabase: First call, initializing...');
     _initialized = true;
     _supabase = initializeSupabase();
   }
@@ -243,41 +246,43 @@ export function getSupabase(): SupabaseClient | null {
 }
 
 /**
- * Test RPC connectivity - useful for debugging
+ * Test RPC connectivity - useful for debugging (dev only)
  */
-export async function testRpcCall(): Promise<{success: boolean; error?: string; duration?: number}> {
-  const supabase = getSupabase();
-  if (!supabase) {
-    return {success: false, error: 'No supabase client'};
-  }
+export const testRpcCall = __DEV__
+  ? async (): Promise<{success: boolean; error?: string; duration?: number}> => {
+      const supabase = getSupabase();
+      if (!supabase) {
+        return {success: false, error: 'No supabase client'};
+      }
 
-  console.log('[Supabase] testRpcCall: Getting session...');
-  const {data: {session}} = await supabase.auth.getSession();
-  if (!session?.user) {
-    return {success: false, error: 'No session'};
-  }
+      logger.log('[Supabase] testRpcCall: Getting session...');
+      const {data: {session}} = await supabase.auth.getSession();
+      if (!session?.user) {
+        return {success: false, error: 'No session'};
+      }
 
-  console.log('[Supabase] testRpcCall: Calling RPC...');
-  const startTime = Date.now();
-  try {
-    const {data, error} = await supabase.rpc('get_leaderboard', {
-      p_user_id: session.user.id,
-      p_friends_only: false,
-      p_period: 'alltime',
-      p_limit: 1,
-    });
-    const duration = Date.now() - startTime;
-    console.log(`[Supabase] testRpcCall: Completed in ${duration}ms`);
+      logger.log('[Supabase] testRpcCall: Calling RPC...');
+      const startTime = Date.now();
+      try {
+        const {data, error} = await supabase.rpc('get_leaderboard', {
+          p_user_id: session.user.id,
+          p_friends_only: false,
+          p_period: 'alltime',
+          p_limit: 1,
+        });
+        const duration = Date.now() - startTime;
+        logger.log(`[Supabase] testRpcCall: Completed in ${duration}ms`);
 
-    if (error) {
-      return {success: false, error: error.message, duration};
+        if (error) {
+          return {success: false, error: error.message, duration};
+        }
+        return {success: true, duration};
+      } catch (err) {
+        const duration = Date.now() - startTime;
+        return {success: false, error: String(err), duration};
+      }
     }
-    return {success: true, duration};
-  } catch (err) {
-    const duration = Date.now() - startTime;
-    return {success: false, error: String(err), duration};
-  }
-}
+  : undefined;
 
 /**
  * Legacy export for backwards compatibility

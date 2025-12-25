@@ -2,6 +2,7 @@ import React from 'react';
 import {View, Text, Pressable, StyleSheet, Share} from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {palette} from '../../../../theme/colors';
+import {logger} from '../../../../utils/logger';
 import {formatShortDate} from '../../../../utils/formatters';
 import {StreakBadge} from '../StreakBadge';
 import {LeaderboardPreview} from '../LeaderboardPreview';
@@ -66,7 +67,7 @@ export function CompletedCard({
     try {
       await Share.share({message});
     } catch (error) {
-      console.error('Share failed:', error);
+      logger.error('Share failed:', error);
     }
   };
 

@@ -9,6 +9,7 @@ import {isDevelopment} from '../../config/environment';
 import {VALID_LENGTHS} from '../../config/gameConfig';
 import {getSupabase, getCachedSession, getValidAccessToken} from '../supabase/client';
 import {directUpsert} from '../supabase/directRpc';
+import {logger} from '../../utils/logger';
 import {
   UserProfile,
   LengthStats,
@@ -184,17 +185,17 @@ class SupabaseProfileService implements IProfileService {
   }
 
   async syncStats(): Promise<void> {
-    console.log('[ProfileService] syncStats called');
+    logger.log('[ProfileService] syncStats called');
 
     // Get a valid token (refreshes if expiring soon)
     const token = await getValidAccessToken();
     const session = getCachedSession();
 
     if (!token || !session) {
-      console.warn('[ProfileService] No valid token or session - skipping sync');
+      logger.warn('[ProfileService] No valid token or session - skipping sync');
       return;
     }
-    console.log('[ProfileService] Syncing stats for user:', session.user.id);
+    logger.log('[ProfileService] Syncing stats for user:', session.user.id);
 
     const localProfile = getLocalProfile();
 
@@ -210,14 +211,14 @@ class SupabaseProfileService implements IProfileService {
         continue;
       }
 
-      console.log(`[ProfileService] Upserting stats for length ${length}:`, {
+      logger.log(`[ProfileService] Upserting stats for length ${length}:`, {
         gamesPlayed: stats.gamesPlayed,
         gamesWon: stats.gamesWon,
       });
 
       // Warn if lastPlayedDate is empty string (helps trace data corruption source)
       if (stats.lastPlayedDate === '') {
-        console.warn(`[ProfileService] Empty lastPlayedDate for length ${length} - source needs investigation`);
+        logger.warn(`[ProfileService] Empty lastPlayedDate for length ${length} - source needs investigation`);
       }
 
       // Use directUpsert with timeout (avoids Supabase JS client pipeline)
@@ -241,9 +242,9 @@ class SupabaseProfileService implements IProfileService {
       );
 
       if (error) {
-        console.error(`[ProfileService] Upsert failed for length ${length}:`, error.message);
+        logger.error(`[ProfileService] Upsert failed for length ${length}:`, error.message);
       } else {
-        console.log(`[ProfileService] Stats synced for length ${length}`);
+        logger.log(`[ProfileService] Stats synced for length ${length}`);
       }
     }
   }

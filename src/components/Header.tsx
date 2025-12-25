@@ -3,6 +3,7 @@ import React from 'react';
 import {View, Text, StyleSheet, Pressable} from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {palette} from '../theme/colors';
+import {logger} from '../utils/logger';
 
 type Props = {
   mode: 'daily' | 'free';
@@ -32,7 +33,7 @@ export default function Header({
           <Pressable
             style={styles.menuBtn}
             onPress={() => {
-              console.log('[Header] Settings button pressed');
+              logger.log('[Header] Settings button pressed');
               onMenuPress();
             }}
             accessibilityLabel="Settings"
@@ -54,7 +55,7 @@ export default function Header({
           <Pressable
             style={[styles.hintBtn, hintDisabled && styles.hintBtnDisabled]}
             onPress={() => {
-              console.log('[Header] Hint button pressed, hintDisabled:', hintDisabled);
+              logger.log('[Header] Hint button pressed, hintDisabled:', hintDisabled);
               if (!hintDisabled) {
                 onHintPress();
               }
@@ -67,7 +68,7 @@ export default function Header({
           </Pressable>
         )}
         <Pressable onPress={() => {
-          console.log('[Header] New button pressed');
+          logger.log('[Header] New button pressed');
           onNewGamePress();
         }}>
           <LinearGradient

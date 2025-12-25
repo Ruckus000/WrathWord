@@ -2,6 +2,7 @@ import React, {useState, useCallback, useEffect} from 'react';
 import {View, Text, StyleSheet, Pressable} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {palette} from '../../theme/colors';
+import {logger} from '../../utils/logger';
 import {ChevronLeft, PlusIcon} from '../../components/icons/SettingsIcons';
 import {Friend} from '../../data/mockFriends';
 import {friendsService} from '../../services/data';
@@ -58,7 +59,7 @@ export default function FriendsScreen({
 
   const loadFriends = useCallback(async () => {
     if (!userId) {
-      console.log('[FriendsScreen] loadFriends: No userId, skipping');
+      logger.log('[FriendsScreen] loadFriends: No userId, skipping');
       return;
     }
     setLoading(true);
@@ -78,7 +79,7 @@ export default function FriendsScreen({
       );
       setFriends(friendsData);
     } catch (err) {
-      console.error('Failed to load friends:', err);
+      logger.error('Failed to load friends:', err);
       setError(
         err instanceof Error ? err.message : 'Failed to load friends',
       );

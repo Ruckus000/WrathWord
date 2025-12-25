@@ -28,6 +28,13 @@ type Props = {
   onNavigateToSignUp: () => void;
 };
 
+// Email validation regex
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isValidEmail(email: string): boolean {
+  return EMAIL_REGEX.test(email.trim());
+}
+
 // Simple social icons
 function GoogleIcon() {
   return (
@@ -77,9 +84,15 @@ export default function SignInScreen({
 
   const handleSignIn = async () => {
     setError('');
+    const trimmedEmail = email.trim();
 
-    if (!email || !password) {
+    if (!trimmedEmail || !password) {
       setError('Please enter both email and password');
+      return;
+    }
+
+    if (!isValidEmail(trimmedEmail)) {
+      setError('Please enter a valid email address');
       return;
     }
 
@@ -98,7 +111,7 @@ export default function SignInScreen({
       );
 
       const result = await Promise.race([
-        authService.signIn(email, password),
+        authService.signIn(trimmedEmail, password),
         timeoutPromise,
       ]);
 
@@ -120,16 +133,22 @@ export default function SignInScreen({
   const handleForgotPassword = async () => {
     setError('');
     setResetSent(false);
+    const trimmedEmail = email.trim();
 
-    if (!email) {
+    if (!trimmedEmail) {
       setError('Please enter your email address');
+      return;
+    }
+
+    if (!isValidEmail(trimmedEmail)) {
+      setError('Please enter a valid email address');
       return;
     }
 
     setResetLoading(true);
 
     try {
-      const result = await authService.resetPassword(email);
+      const result = await authService.resetPassword(trimmedEmail);
 
       if (result.error) {
         setError(result.error.message);

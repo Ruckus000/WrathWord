@@ -35,6 +35,7 @@
  */
 
 import {supabaseConfig} from '../../config/environment';
+import {logger} from '../../utils/logger';
 
 interface DirectRpcOptions {
   /** The name of the Postgres function to call */
@@ -87,7 +88,7 @@ export async function directRpc<T>(
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   const startTime = Date.now();
-  console.log(`[DirectRPC] Calling ${functionName}...`);
+  logger.log(`[DirectRPC] Calling ${functionName}...`);
 
   try {
     const response = await fetch(
@@ -108,11 +109,11 @@ export async function directRpc<T>(
 
     clearTimeout(timeoutId);
     const duration = Date.now() - startTime;
-    console.log(`[DirectRPC] ${functionName} completed in ${duration}ms`);
+    logger.log(`[DirectRPC] ${functionName} completed in ${duration}ms`);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`[DirectRPC] ${functionName} error: ${response.status} - ${errorText}`);
+      logger.error(`[DirectRPC] ${functionName} error: ${response.status} - ${errorText}`);
       return {
         data: null,
         error: new Error(`RPC error ${response.status}: ${errorText}`),
@@ -120,21 +121,21 @@ export async function directRpc<T>(
     }
 
     const data = await response.json();
-    console.log(`[DirectRPC] ${functionName} returned ${Array.isArray(data) ? data.length + ' items' : 'data'}`);
+    logger.log(`[DirectRPC] ${functionName} returned ${Array.isArray(data) ? data.length + ' items' : 'data'}`);
     return {data: data as T, error: null};
   } catch (err) {
     clearTimeout(timeoutId);
     const duration = Date.now() - startTime;
 
     if (err instanceof Error && err.name === 'AbortError') {
-      console.error(`[DirectRPC] ${functionName} timed out after ${duration}ms`);
+      logger.error(`[DirectRPC] ${functionName} timed out after ${duration}ms`);
       return {
         data: null,
         error: new Error(`Request timed out after ${timeoutMs}ms`),
       };
     }
 
-    console.error(`[DirectRPC] ${functionName} failed after ${duration}ms:`, err);
+    logger.error(`[DirectRPC] ${functionName} failed after ${duration}ms:`, err);
     return {
       data: null,
       error: err instanceof Error ? err : new Error('Unknown error'),
@@ -188,7 +189,7 @@ export async function directQuery<T>(options: {
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   const startTime = Date.now();
-  console.log(`[DirectQuery] Querying ${table}...`);
+  logger.log(`[DirectQuery] Querying ${table}...`);
 
   try {
     const response = await fetch(url.toString(), {
@@ -202,7 +203,7 @@ export async function directQuery<T>(options: {
 
     clearTimeout(timeoutId);
     const duration = Date.now() - startTime;
-    console.log(`[DirectQuery] ${table} completed in ${duration}ms`);
+    logger.log(`[DirectQuery] ${table} completed in ${duration}ms`);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -260,7 +261,7 @@ export async function directInsert(
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   const startTime = Date.now();
-  console.log(`[DirectInsert] Inserting into ${table}...`);
+  logger.log(`[DirectInsert] Inserting into ${table}...`);
 
   try {
     const response = await fetch(`${supabaseConfig.url}/rest/v1/${table}`, {
@@ -277,11 +278,11 @@ export async function directInsert(
 
     clearTimeout(timeoutId);
     const duration = Date.now() - startTime;
-    console.log(`[DirectInsert] ${table} completed in ${duration}ms`);
+    logger.log(`[DirectInsert] ${table} completed in ${duration}ms`);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(
+      logger.error(
         `[DirectInsert] ${table} error: ${response.status} - ${errorText}`,
       );
       return {error: new Error(`Insert error ${response.status}: ${errorText}`)};
@@ -293,11 +294,11 @@ export async function directInsert(
     const duration = Date.now() - startTime;
 
     if (err instanceof Error && err.name === 'AbortError') {
-      console.error(`[DirectInsert] ${table} timed out after ${duration}ms`);
+      logger.error(`[DirectInsert] ${table} timed out after ${duration}ms`);
       return {error: new Error(`Insert timed out after ${timeoutMs}ms`)};
     }
 
-    console.error(`[DirectInsert] ${table} failed after ${duration}ms:`, err);
+    logger.error(`[DirectInsert] ${table} failed after ${duration}ms:`, err);
     return {error: err instanceof Error ? err : new Error('Unknown error')};
   }
 }
@@ -332,7 +333,7 @@ export async function directUpsert(
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   const startTime = Date.now();
-  console.log(`[DirectUpsert] Upserting into ${table}...`);
+  logger.log(`[DirectUpsert] Upserting into ${table}...`);
 
   try {
     const response = await fetch(
@@ -352,11 +353,11 @@ export async function directUpsert(
 
     clearTimeout(timeoutId);
     const duration = Date.now() - startTime;
-    console.log(`[DirectUpsert] ${table} completed in ${duration}ms`);
+    logger.log(`[DirectUpsert] ${table} completed in ${duration}ms`);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(
+      logger.error(
         `[DirectUpsert] ${table} error: ${response.status} - ${errorText}`,
       );
       return {error: new Error(`Upsert error ${response.status}: ${errorText}`)};
@@ -368,11 +369,11 @@ export async function directUpsert(
     const duration = Date.now() - startTime;
 
     if (err instanceof Error && err.name === 'AbortError') {
-      console.error(`[DirectUpsert] ${table} timed out after ${duration}ms`);
+      logger.error(`[DirectUpsert] ${table} timed out after ${duration}ms`);
       return {error: new Error(`Upsert timed out after ${timeoutMs}ms`)};
     }
 
-    console.error(`[DirectUpsert] ${table} failed after ${duration}ms:`, err);
+    logger.error(`[DirectUpsert] ${table} failed after ${duration}ms:`, err);
     return {error: err instanceof Error ? err : new Error('Unknown error')};
   }
 }

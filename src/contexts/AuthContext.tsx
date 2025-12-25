@@ -17,7 +17,8 @@ import {authService, AuthSession, AuthUser} from '../services/auth';
 import {isDevelopment} from '../config/environment';
 import {setCurrentUserId} from '../storage/userScope';
 import {friendsService, getProfileService} from '../services/data';
-import {getSupabase} from '../services/supabase/client';
+import {getSupabase, setCachedSession} from '../services/supabase/client';
+import {logger} from '../utils/logger';
 
 // Stable user ID for development mode
 const DEV_MODE_USER_ID = 'dev-user';
@@ -63,13 +64,13 @@ export function AuthProvider({children}: AuthProviderProps) {
       // This populates the cache so FriendsScreen loads instantly
       // Pass userId and accessToken for direct API calls (bypasses Supabase JS client)
       friendsService.getFriends(undefined, session.user.id, session.accessToken ?? undefined).catch(err => {
-        console.log('Background friends pre-fetch failed:', err);
+        logger.log('Background friends pre-fetch failed:', err);
       });
 
       // Sync local stats to DB on login (fire-and-forget)
       // This pushes any existing local game data to the cloud
       getProfileService().syncStats().catch(err => {
-        console.log('[AuthContext] Background stats sync failed:', err);
+        logger.log('[AuthContext] Background stats sync failed:', err);
       });
     } else {
       // No user signed in - clear user ID
@@ -99,7 +100,7 @@ export function AuthProvider({children}: AuthProviderProps) {
           setLoading(false);
         }
       } catch (error) {
-        console.error('Auth initialization failed:', error);
+        logger.error('Auth initialization failed:', error);
         if (isMounted) {
           setSession(null);
           setLoading(false);
@@ -136,16 +137,16 @@ export function AuthProvider({children}: AuthProviderProps) {
 
     // Start auto refresh when app launches
     supabase.auth.startAutoRefresh();
-    console.log('[AuthContext] Started Supabase auto-refresh');
+    logger.log('[AuthContext] Started Supabase auto-refresh');
 
     // Handle app state changes
     const handleAppStateChange = (state: AppStateStatus) => {
       if (state === 'active') {
         supabase.auth.startAutoRefresh();
-        console.log('[AuthContext] App active - started auto-refresh');
+        logger.log('[AuthContext] App active - started auto-refresh');
       } else {
         supabase.auth.stopAutoRefresh();
-        console.log('[AuthContext] App backgrounded - stopped auto-refresh');
+        logger.log('[AuthContext] App backgrounded - stopped auto-refresh');
       }
     };
 
@@ -158,8 +159,21 @@ export function AuthProvider({children}: AuthProviderProps) {
   }, []);
 
   const handleSignOut = async () => {
+    logger.log('[AuthContext] Signing out - clearing session data');
+
+    // Clear cached session first (prevents stale token usage)
+    setCachedSession(null);
+
+    // Clear user-scoped storage (setCurrentUserId(null) is called in useEffect when session becomes null)
+    setCurrentUserId(null);
+
+    // Sign out from auth service
     await authService.signOut();
+
+    // Update local state
     setSession(null);
+
+    logger.log('[AuthContext] Sign out complete');
   };
 
   const value: AuthContextValue = {

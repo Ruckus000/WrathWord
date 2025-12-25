@@ -1,13 +1,16 @@
 // src/application/game/AbandonGameUseCase.ts
 
 import { IGameRepository } from '../../domain/game/repositories/IGameRepository';
-import { GameMode } from '../../domain/game/value-objects/GameConfig';
+import { ICompletionRepository } from '../../domain/game/repositories/ICompletionRepository';
+import { GameMode, ValidLength } from '../../domain/game/value-objects/GameConfig';
 
 export interface AbandonedGameInfo {
   guessCount: number;
   hintWasUsed: boolean;
   mode: GameMode;
   dateISO: string;
+  length: ValidLength;
+  maxRows: number;
 }
 
 export type AbandonGameResult = {
@@ -19,12 +22,14 @@ export type AbandonGameResult = {
  * AbandonGameUseCase handles abandoning/discarding the current game.
  *
  * Responsibilities:
+ * - Mark daily games as completed (prevents replay)
  * - Clear saved game state from repository
  * - Return info about the abandoned game (for analytics/logging)
  */
 export class AbandonGameUseCase {
   constructor(
     private readonly gameRepository: IGameRepository,
+    private readonly completionRepository: ICompletionRepository,
   ) {}
 
   /**
@@ -44,7 +49,18 @@ export class AbandonGameUseCase {
         hintWasUsed: savedState.hintUsed,
         mode: savedState.mode,
         dateISO: savedState.dateISO,
+        length: savedState.length,
+        maxRows: savedState.maxRows,
       };
+
+      // CRITICAL: Mark daily games as completed to prevent replay
+      if (savedState.mode === 'daily') {
+        this.completionRepository.markDailyCompleted(
+          savedState.length,
+          savedState.maxRows,
+          savedState.dateISO,
+        );
+      }
     }
 
     // Clear the saved game

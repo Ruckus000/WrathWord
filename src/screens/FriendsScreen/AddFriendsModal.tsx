@@ -3,6 +3,7 @@ import {View, Text, StyleSheet, Pressable, Modal} from 'react-native';
 import {KeyboardAwareScrollView} from 'react-native-keyboard-controller';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {palette} from '../../theme/colors';
+import {logger} from '../../utils/logger';
 import {XIcon} from '../../components/icons/SettingsIcons';
 import {getFriendCode} from '../../storage/friendCode';
 import {MOCK_FRIENDS} from '../../data/mockFriends';
@@ -110,31 +111,31 @@ export default function AddFriendsModal({visible, onClose}: Props) {
   const handleAddFriend = useCallback((userId: string) => {
     triggerImpact('Medium');
     // TODO: In real app, send friend request via API
-    console.log('Send friend request to:', userId);
+    logger.log('Send friend request to:', userId);
   }, []);
 
   const handleAcceptRequest = useCallback((requestId: string) => {
     triggerNotification('Success');
     // TODO: In real app, accept request via API
-    console.log('Accept request:', requestId);
+    logger.log('Accept request:', requestId);
   }, []);
 
   const handleDeclineRequest = useCallback((requestId: string) => {
     triggerImpact('Light');
     // TODO: In real app, decline request via API
-    console.log('Decline request:', requestId);
+    logger.log('Decline request:', requestId);
   }, []);
 
   const handleCancelRequest = useCallback((requestId: string) => {
     triggerImpact('Light');
     // TODO: In real app, cancel outgoing request via API
-    console.log('Cancel request:', requestId);
+    logger.log('Cancel request:', requestId);
   }, []);
 
   const handleCodeCopied = useCallback(() => {
     triggerImpact('Light');
     // TODO: Show toast
-    console.log('Friend code copied');
+    logger.log('Friend code copied');
   }, []);
 
   return (

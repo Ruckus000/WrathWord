@@ -9,20 +9,22 @@ import {SUPABASE_URL, SUPABASE_ANON_KEY} from '@env';
 
 /**
  * ========================================
- * MANUAL MODE TOGGLE
+ * DEVELOPMENT MODE CONFIGURATION
  * ========================================
  *
- * Set this to control which mode the app runs in:
+ * Uses React Native's __DEV__ flag which is automatically:
+ * - true in development builds (Metro bundler)
+ * - false in production/release builds
  *
- *   true  = DEV MODE (mock data, no auth required)
- *   false = PROD MODE (Supabase backend, real auth)
+ * This prevents accidentally shipping with dev mode enabled.
  *
- * Change this value and restart Metro to switch modes.
+ * To test production behavior during development, build a release:
+ *   npx react-native run-ios --mode Release
  */
-const FORCE_DEV_MODE = false;
 
 /**
  * Main flag that determines if app is in development mode.
+ * Derived from React Native's __DEV__ global - cannot be accidentally misconfigured.
  *
  * When true (DEV MODE):
  * - Authentication is bypassed (auto-logged in)
@@ -36,7 +38,7 @@ const FORCE_DEV_MODE = false;
  * - Game results sync to cloud
  * - Requires .env with Supabase credentials
  */
-export const isDevelopment = FORCE_DEV_MODE;
+export const isDevelopment = __DEV__;
 
 /**
  * Supabase configuration

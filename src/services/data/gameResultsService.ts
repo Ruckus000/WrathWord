@@ -11,6 +11,7 @@ import {directInsert} from '../supabase/directRpc';
 import {TileState} from '../../logic/evaluateGuess';
 import {recordGameResult as recordLocal} from '../../storage/profile';
 import {getProfileService} from './profileService';
+import {logger} from '../../utils/logger';
 
 export interface GameResult {
   id?: string;
@@ -68,12 +69,11 @@ class SupabaseGameResultsService implements IGameResultsService {
   async saveGameResult(
     result: Omit<GameResult, 'id' | 'userId' | 'createdAt'>,
   ): Promise<void> {
-    // DIAGNOSTIC: Trace exactly what's happening
-    console.log('[GameResultsService] saveGameResult called');
+    logger.log('[GameResultsService] saveGameResult called');
     const cachedSession = getCachedSession();
-    console.log('[GameResultsService] getCachedSession() =', cachedSession ? 'EXISTS' : 'NULL');
+    logger.log('[GameResultsService] getCachedSession() =', cachedSession ? 'EXISTS' : 'NULL');
     if (cachedSession) {
-      console.log('[GameResultsService] user.id =', cachedSession.user.id);
+      logger.log('[GameResultsService] user.id =', cachedSession.user.id);
     }
 
     // Always save locally first
@@ -84,19 +84,19 @@ class SupabaseGameResultsService implements IGameResultsService {
       maxRows: result.maxRows,
       date: result.date,
     });
-    console.log('[GameResultsService] Saved locally');
+    logger.log('[GameResultsService] Saved locally');
 
     // Get a valid token (refreshes if expiring soon)
     const token = await getValidAccessToken();
     const session = getCachedSession();
 
     if (!token || !session) {
-      console.warn(
+      logger.warn(
         '[GameResultsService] No valid token or session - skipping cloud sync',
       );
       return;
     }
-    console.log('[GameResultsService] Using valid token for user:', session.user.id);
+    logger.log('[GameResultsService] Using valid token for user:', session.user.id);
 
     try {
       // Use directInsert with timeout (avoids Supabase JS client pipeline)
@@ -115,22 +115,22 @@ class SupabaseGameResultsService implements IGameResultsService {
       );
 
       if (error) {
-        console.error('[GameResultsService] Insert failed:', error.message);
+        logger.error('[GameResultsService] Insert failed:', error.message);
         return;
       }
-      console.log('[GameResultsService] game_results insert succeeded');
+      logger.log('[GameResultsService] game_results insert succeeded');
 
       // Sync aggregated stats to game_stats table
       // This ensures leaderboards have fresh data
-      console.log('[GameResultsService] About to call syncStats()...');
+      logger.log('[GameResultsService] About to call syncStats()...');
       const startSync = Date.now();
       await getProfileService().syncStats();
-      console.log(
+      logger.log(
         `[GameResultsService] syncStats() returned in ${Date.now() - startSync}ms`,
       );
-      console.log('[GameResultsService] Stats sync complete');
+      logger.log('[GameResultsService] Stats sync complete');
     } catch (err) {
-      console.error('[GameResultsService] Exception caught:', err);
+      logger.error('[GameResultsService] Exception caught:', err);
       // Fail silently - local save is already done
     }
   }

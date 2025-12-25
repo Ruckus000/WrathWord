@@ -28,6 +28,7 @@ import {
   isCacheStale,
   CACHE_KEYS,
 } from '../utils/cache';
+import {logger} from '../../utils/logger';
 
 /**
  * Safely convert a value to a number, returning fallback for NaN/null/undefined
@@ -122,17 +123,17 @@ class MockFriendsService implements IFriendsService {
 
   async sendFriendRequest(toUserId: string): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 300));
-    console.log('Mock: Sent friend request to', toUserId);
+    logger.log('Mock: Sent friend request to', toUserId);
   }
 
   async acceptFriendRequest(requestId: string): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 300));
-    console.log('Mock: Accepted friend request', requestId);
+    logger.log('Mock: Accepted friend request', requestId);
   }
 
   async declineFriendRequest(requestId: string): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 300));
-    console.log('Mock: Declined friend request', requestId);
+    logger.log('Mock: Declined friend request', requestId);
   }
 
   async getIncomingRequests(): Promise<FriendRequest[]> {
@@ -214,7 +215,7 @@ class SupabaseFriendsService implements IFriendsService {
         });
 
         if (error || !data) {
-          console.log('[FriendsService] getTodayResults direct query failed:', error?.message);
+          logger.log('[FriendsService] getTodayResults direct query failed:', error?.message);
           return new Map();
         }
 
@@ -310,7 +311,7 @@ class SupabaseFriendsService implements IFriendsService {
   private async getSessionWithTimeout(supabase: any, timeoutMs = 5000): Promise<{user: {id: string}} | null> {
     return new Promise((resolve) => {
       const timeoutId = setTimeout(() => {
-        console.log('[FriendsService] getSession timed out after', timeoutMs, 'ms');
+        logger.log('[FriendsService] getSession timed out after', timeoutMs, 'ms');
         resolve(null);
       }, timeoutMs);
 
@@ -321,7 +322,7 @@ class SupabaseFriendsService implements IFriendsService {
         })
         .catch((err: any) => {
           clearTimeout(timeoutId);
-          console.error('[FriendsService] getSession error:', err);
+          logger.error('[FriendsService] getSession error:', err);
           resolve(null);
         });
     });
@@ -334,7 +335,7 @@ class SupabaseFriendsService implements IFriendsService {
    * @param accessToken - Optional access token for direct API calls (fast path)
    */
   private async fetchFriendsFromApi(userId?: string, accessToken?: string): Promise<Friend[]> {
-    console.log('[FriendsService] fetchFriendsFromApi: Starting... userId:', !!userId, 'accessToken:', !!accessToken);
+    logger.log('[FriendsService] fetchFriendsFromApi: Starting... userId:', !!userId, 'accessToken:', !!accessToken);
 
     // Get a valid token - either use provided one or fetch a fresh one
     const token = accessToken || await getValidAccessToken();
@@ -343,7 +344,7 @@ class SupabaseFriendsService implements IFriendsService {
 
     // FAST PATH: Use directRpc if we have both userId and token
     if (finalUserId && token) {
-      console.log('[FriendsService] fetchFriendsFromApi: Using direct RPC (fast path)...');
+      logger.log('[FriendsService] fetchFriendsFromApi: Using direct RPC (fast path)...');
       const {data, error} = await directRpc<any[]>({
         functionName: 'get_leaderboard',
         params: {
@@ -357,16 +358,16 @@ class SupabaseFriendsService implements IFriendsService {
       });
 
       if (error) {
-        console.error('[FriendsService] fetchFriendsFromApi: Direct RPC error:', error.message);
+        logger.error('[FriendsService] fetchFriendsFromApi: Direct RPC error:', error.message);
         return [];
       }
 
       if (!data || data.length === 0) {
-        console.log('[FriendsService] fetchFriendsFromApi: No friends data returned');
+        logger.log('[FriendsService] fetchFriendsFromApi: No friends data returned');
         return [];
       }
 
-      console.log(`[FriendsService] fetchFriendsFromApi: Got ${data.length} friends`);
+      logger.log(`[FriendsService] fetchFriendsFromApi: Got ${data.length} friends`);
 
       // Fetch today's results using direct query
       const userIds = data.map((row: any) => row.user_id);
@@ -402,26 +403,26 @@ class SupabaseFriendsService implements IFriendsService {
     }
 
     // SLOW PATH: Fall back to Supabase JS client (may hang)
-    console.log('[FriendsService] fetchFriendsFromApi: Using Supabase JS client (slow fallback)...');
+    logger.log('[FriendsService] fetchFriendsFromApi: Using Supabase JS client (slow fallback)...');
     const supabase = getSupabase();
     if (!supabase) {
-      console.log('[FriendsService] fetchFriendsFromApi: No supabase client');
+      logger.log('[FriendsService] fetchFriendsFromApi: No supabase client');
       return [];
     }
 
     // If userId was passed, use it directly (avoids getSession which can hang)
     let slowPathUserId = userId;
     if (!slowPathUserId) {
-      console.log('[FriendsService] fetchFriendsFromApi: No userId passed, getting session...');
+      logger.log('[FriendsService] fetchFriendsFromApi: No userId passed, getting session...');
       const session = await this.getSessionWithTimeout(supabase);
       if (!session?.user) {
-        console.log('[FriendsService] fetchFriendsFromApi: No session/user (timed out or not signed in)');
+        logger.log('[FriendsService] fetchFriendsFromApi: No session/user (timed out or not signed in)');
         return [];
       }
       slowPathUserId = session.user.id;
     }
 
-    console.log('[FriendsService] fetchFriendsFromApi: Calling supabase.rpc (may hang)...');
+    logger.log('[FriendsService] fetchFriendsFromApi: Calling supabase.rpc (may hang)...');
     const {data, error} = await supabase.rpc('get_leaderboard', {
       p_user_id: slowPathUserId,
       p_friends_only: true,
@@ -430,16 +431,16 @@ class SupabaseFriendsService implements IFriendsService {
     });
 
     if (error) {
-      console.error('[FriendsService] fetchFriendsFromApi: RPC error:', error);
+      logger.error('[FriendsService] fetchFriendsFromApi: RPC error:', error);
       return [];
     }
 
     if (!data || data.length === 0) {
-      console.log('[FriendsService] fetchFriendsFromApi: No data returned');
+      logger.log('[FriendsService] fetchFriendsFromApi: No data returned');
       return [];
     }
 
-    console.log(`[FriendsService] fetchFriendsFromApi: Got ${data.length} friends`);
+    logger.log(`[FriendsService] fetchFriendsFromApi: Got ${data.length} friends`);
 
     const userIds = data.map((row: any) => row.user_id);
     const todayResults = await this.getTodayResults(userIds);
@@ -481,15 +482,15 @@ class SupabaseFriendsService implements IFriendsService {
    * @returns Cached data immediately if available, otherwise fetches from API
    */
   async getFriends(onFreshData?: OnFreshData<Friend[]>, userId?: string, accessToken?: string): Promise<Friend[]> {
-    console.log('[FriendsService] getFriends: Starting... userId:', !!userId, 'accessToken:', !!accessToken);
+    logger.log('[FriendsService] getFriends: Starting... userId:', !!userId, 'accessToken:', !!accessToken);
     // Check cache first
     const cached = getCache<Friend[]>(CACHE_KEYS.FRIENDS);
     const isStale = isCacheStale(CACHE_KEYS.FRIENDS);
-    console.log(`[FriendsService] getFriends: Cache status - cached: ${cached !== null}, stale: ${isStale}`);
+    logger.log(`[FriendsService] getFriends: Cache status - cached: ${cached !== null}, stale: ${isStale}`);
 
     // If we have cached data
     if (cached !== null) {
-      console.log(`[FriendsService] getFriends: Returning cached data (${cached.length} friends)`);
+      logger.log(`[FriendsService] getFriends: Returning cached data (${cached.length} friends)`);
       // If stale, trigger background refresh
       if (isStale && onFreshData) {
         this.fetchFriendsFromApi(userId, accessToken)
@@ -498,7 +499,7 @@ class SupabaseFriendsService implements IFriendsService {
             onFreshData(freshData);
           })
           .catch(err => {
-            console.error('Background friends refresh failed:', err);
+            logger.error('Background friends refresh failed:', err);
           });
       }
       // Return cached data immediately
@@ -506,14 +507,14 @@ class SupabaseFriendsService implements IFriendsService {
     }
 
     // No cache - fetch from API
-    console.log('[FriendsService] getFriends: No cache, fetching from API...');
+    logger.log('[FriendsService] getFriends: No cache, fetching from API...');
     try {
       const friends = await this.fetchFriendsFromApi(userId, accessToken);
-      console.log(`[FriendsService] getFriends: Fetched ${friends.length} friends, caching...`);
+      logger.log(`[FriendsService] getFriends: Fetched ${friends.length} friends, caching...`);
       setCache(CACHE_KEYS.FRIENDS, friends);
       return friends;
     } catch (err) {
-      console.error('[FriendsService] getFriends: Failed to fetch:', err);
+      logger.error('[FriendsService] getFriends: Failed to fetch:', err);
       return [];
     }
   }
@@ -577,7 +578,7 @@ class SupabaseFriendsService implements IFriendsService {
         status: 'pending',
       });
     } catch (err) {
-      console.error('Failed to send friend request:', err);
+      logger.error('Failed to send friend request:', err);
     }
   }
 
@@ -591,7 +592,7 @@ class SupabaseFriendsService implements IFriendsService {
       // Call the helper function
       await supabase.rpc('accept_friend_request', {p_request_id: requestId});
     } catch (err) {
-      console.error('Failed to accept friend request:', err);
+      logger.error('Failed to accept friend request:', err);
     }
   }
 
@@ -607,7 +608,7 @@ class SupabaseFriendsService implements IFriendsService {
         .update({status: 'declined'})
         .eq('id', requestId);
     } catch (err) {
-      console.error('Failed to decline friend request:', err);
+      logger.error('Failed to decline friend request:', err);
     }
   }
 
@@ -680,7 +681,7 @@ class SupabaseFriendsService implements IFriendsService {
    * @param accessToken - Optional access token for direct API calls (fast path)
    */
   private async fetchGlobalLeaderboardFromApi(limit: number, userId?: string, accessToken?: string): Promise<Friend[]> {
-    console.log('[FriendsService] fetchGlobalLeaderboardFromApi: Starting... userId:', !!userId, 'accessToken:', !!accessToken);
+    logger.log('[FriendsService] fetchGlobalLeaderboardFromApi: Starting... userId:', !!userId, 'accessToken:', !!accessToken);
 
     // Get a valid token - either use provided one or fetch a fresh one
     const token = accessToken || await getValidAccessToken();
@@ -689,7 +690,7 @@ class SupabaseFriendsService implements IFriendsService {
 
     // FAST PATH: Use directRpc if we have both userId and token
     if (finalUserId && token) {
-      console.log('[FriendsService] fetchGlobalLeaderboardFromApi: Using direct RPC (fast path)...');
+      logger.log('[FriendsService] fetchGlobalLeaderboardFromApi: Using direct RPC (fast path)...');
       const {data, error} = await directRpc<any[]>({
         functionName: 'get_leaderboard',
         params: {
@@ -703,16 +704,16 @@ class SupabaseFriendsService implements IFriendsService {
       });
 
       if (error) {
-        console.error('[FriendsService] fetchGlobalLeaderboardFromApi: Direct RPC error:', error.message);
+        logger.error('[FriendsService] fetchGlobalLeaderboardFromApi: Direct RPC error:', error.message);
         return [];
       }
 
       if (!data || data.length === 0) {
-        console.log('[FriendsService] fetchGlobalLeaderboardFromApi: No leaderboard data returned');
+        logger.log('[FriendsService] fetchGlobalLeaderboardFromApi: No leaderboard data returned');
         return [];
       }
 
-      console.log(`[FriendsService] fetchGlobalLeaderboardFromApi: Got ${data.length} users`);
+      logger.log(`[FriendsService] fetchGlobalLeaderboardFromApi: Got ${data.length} users`);
 
       // Fetch today's results using direct query
       const userIds = data.map((row: any) => row.user_id);
@@ -748,26 +749,26 @@ class SupabaseFriendsService implements IFriendsService {
     }
 
     // SLOW PATH: Fall back to Supabase JS client (may hang)
-    console.log('[FriendsService] fetchGlobalLeaderboardFromApi: Using Supabase JS client (slow fallback)...');
+    logger.log('[FriendsService] fetchGlobalLeaderboardFromApi: Using Supabase JS client (slow fallback)...');
     const supabase = getSupabase();
     if (!supabase) {
-      console.log('[FriendsService] fetchGlobalLeaderboardFromApi: No supabase client');
+      logger.log('[FriendsService] fetchGlobalLeaderboardFromApi: No supabase client');
       return [];
     }
 
     // If userId was passed, use it directly (avoids getSession which can hang)
     let slowPathUserId = userId;
     if (!slowPathUserId) {
-      console.log('[FriendsService] fetchGlobalLeaderboardFromApi: No userId passed, getting session...');
+      logger.log('[FriendsService] fetchGlobalLeaderboardFromApi: No userId passed, getting session...');
       const session = await this.getSessionWithTimeout(supabase);
       if (!session?.user) {
-        console.log('[FriendsService] fetchGlobalLeaderboardFromApi: No session/user (timed out or not signed in)');
+        logger.log('[FriendsService] fetchGlobalLeaderboardFromApi: No session/user (timed out or not signed in)');
         return [];
       }
       slowPathUserId = session.user.id;
     }
 
-    console.log('[FriendsService] fetchGlobalLeaderboardFromApi: Calling supabase.rpc (may hang)...');
+    logger.log('[FriendsService] fetchGlobalLeaderboardFromApi: Calling supabase.rpc (may hang)...');
     const {data, error} = await supabase.rpc('get_leaderboard', {
       p_user_id: slowPathUserId,
       p_friends_only: false,
@@ -776,16 +777,16 @@ class SupabaseFriendsService implements IFriendsService {
     });
 
     if (error) {
-      console.error('[FriendsService] fetchGlobalLeaderboardFromApi: RPC error:', error);
+      logger.error('[FriendsService] fetchGlobalLeaderboardFromApi: RPC error:', error);
       return [];
     }
 
     if (!data || data.length === 0) {
-      console.log('[FriendsService] fetchGlobalLeaderboardFromApi: No data returned');
+      logger.log('[FriendsService] fetchGlobalLeaderboardFromApi: No data returned');
       return [];
     }
 
-    console.log(`[FriendsService] fetchGlobalLeaderboardFromApi: Got ${data.length} users`);
+    logger.log(`[FriendsService] fetchGlobalLeaderboardFromApi: Got ${data.length} users`);
 
     const userIds = data.map((row: any) => row.user_id);
     const todayResults = await this.getTodayResults(userIds);
@@ -833,15 +834,15 @@ class SupabaseFriendsService implements IFriendsService {
     userId?: string,
     accessToken?: string,
   ): Promise<Friend[]> {
-    console.log('[FriendsService] getGlobalLeaderboard: Starting... userId:', !!userId, 'accessToken:', !!accessToken);
+    logger.log('[FriendsService] getGlobalLeaderboard: Starting... userId:', !!userId, 'accessToken:', !!accessToken);
     // Check cache first
     const cached = getCache<Friend[]>(CACHE_KEYS.GLOBAL_LEADERBOARD);
     const isStale = isCacheStale(CACHE_KEYS.GLOBAL_LEADERBOARD);
-    console.log(`[FriendsService] getGlobalLeaderboard: Cache status - cached: ${cached !== null}, stale: ${isStale}`);
+    logger.log(`[FriendsService] getGlobalLeaderboard: Cache status - cached: ${cached !== null}, stale: ${isStale}`);
 
     // If we have cached data
     if (cached !== null) {
-      console.log(`[FriendsService] getGlobalLeaderboard: Returning cached data (${cached.length} users)`);
+      logger.log(`[FriendsService] getGlobalLeaderboard: Returning cached data (${cached.length} users)`);
       // If stale, trigger background refresh
       if (isStale && onFreshData) {
         this.fetchGlobalLeaderboardFromApi(limit, userId, accessToken)
@@ -850,7 +851,7 @@ class SupabaseFriendsService implements IFriendsService {
             onFreshData(freshData);
           })
           .catch(err => {
-            console.error('Background global leaderboard refresh failed:', err);
+            logger.error('Background global leaderboard refresh failed:', err);
           });
       }
       // Return cached data immediately (sliced to limit)
@@ -858,14 +859,14 @@ class SupabaseFriendsService implements IFriendsService {
     }
 
     // No cache - fetch from API
-    console.log('[FriendsService] getGlobalLeaderboard: No cache, fetching from API...');
+    logger.log('[FriendsService] getGlobalLeaderboard: No cache, fetching from API...');
     try {
       const leaderboard = await this.fetchGlobalLeaderboardFromApi(limit, userId, accessToken);
-      console.log(`[FriendsService] getGlobalLeaderboard: Fetched ${leaderboard.length} users, caching...`);
+      logger.log(`[FriendsService] getGlobalLeaderboard: Fetched ${leaderboard.length} users, caching...`);
       setCache(CACHE_KEYS.GLOBAL_LEADERBOARD, leaderboard);
       return leaderboard;
     } catch (err) {
-      console.error('[FriendsService] getGlobalLeaderboard: Failed to fetch:', err);
+      logger.error('[FriendsService] getGlobalLeaderboard: Failed to fetch:', err);
       return [];
     }
   }
@@ -927,7 +928,7 @@ class SupabaseFriendsService implements IFriendsService {
         };
       });
     } catch (err) {
-      console.error('Failed to fetch friends leaderboard:', err);
+      logger.error('Failed to fetch friends leaderboard:', err);
       return [];
     }
   }

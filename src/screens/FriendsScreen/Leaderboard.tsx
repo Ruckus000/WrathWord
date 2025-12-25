@@ -1,6 +1,7 @@
 import React, {useEffect, useState, useCallback} from 'react';
 import {View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable} from 'react-native';
 import {palette} from '../../theme/colors';
+import {logger} from '../../utils/logger';
 import {Friend} from '../../data/mockFriends';
 import {friendsService} from '../../services/data';
 import {useUserTodayResult, useUserStats} from '../../hooks';
@@ -50,7 +51,7 @@ export default function Leaderboard({
   const loadGlobalLeaderboard = useCallback(async () => {
     const currentUserId = user?.id;
     if (!currentUserId) {
-      console.log('[Leaderboard] loadGlobalLeaderboard: No userId, skipping');
+      logger.log('[Leaderboard] loadGlobalLeaderboard: No userId, skipping');
       return;
     }
     setLoadingGlobal(true);
@@ -73,7 +74,7 @@ export default function Leaderboard({
       setGlobalUsers(data);
       setGlobalLoaded(true);
     } catch (err) {
-      console.error('Failed to load global leaderboard:', err);
+      logger.error('Failed to load global leaderboard:', err);
       setGlobalError(
         err instanceof Error ? err.message : 'Failed to load leaderboard',
       );

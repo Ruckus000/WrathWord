@@ -12,6 +12,7 @@ import {gameResultsService} from './gameResultsService';
 import {recordGameResult} from '../../storage/profile';
 import {HomeGameSummary} from '../../screens/HomeScreen/types';
 import {TileState} from '../../logic/evaluateGuess';
+import {logger} from '../../utils/logger';
 
 const GAME_STATE_BASE_KEY = 'game.state';
 
@@ -103,7 +104,7 @@ export async function abandonGame(
     });
   } catch (err) {
     // Fail silently - local save is already done
-    console.warn('[homeService] Cloud save failed during abandon:', err);
+    logger.warn('[homeService] Cloud save failed during abandon:', err);
   }
 
   // Mark daily as completed if applicable

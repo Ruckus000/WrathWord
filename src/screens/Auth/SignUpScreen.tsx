@@ -28,6 +28,13 @@ type Props = {
   onNavigateToSignIn: () => void;
 };
 
+// Email validation regex
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isValidEmail(email: string): boolean {
+  return EMAIL_REGEX.test(email.trim());
+}
+
 // Styled email icon for confirmation screen
 function EmailConfirmIcon() {
   return (
@@ -68,17 +75,25 @@ export default function SignUpScreen({
   const [showConfirmation, setShowConfirmation] = useState(false);
 
   const validateForm = (): boolean => {
-    if (!email || !username || !password || !confirmPassword) {
+    const trimmedEmail = email.trim();
+    const trimmedUsername = username.trim();
+
+    if (!trimmedEmail || !trimmedUsername || !password || !confirmPassword) {
       setError('Please fill in all fields');
       return false;
     }
 
-    if (username.length < 3 || username.length > 20) {
+    if (!isValidEmail(trimmedEmail)) {
+      setError('Please enter a valid email address');
+      return false;
+    }
+
+    if (trimmedUsername.length < 3 || trimmedUsername.length > 20) {
       setError('Username must be 3-20 characters');
       return false;
     }
 
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    if (!/^[a-zA-Z0-9_]+$/.test(trimmedUsername)) {
       setError('Username can only contain letters, numbers, and underscores');
       return false;
     }
@@ -118,7 +133,7 @@ export default function SignUpScreen({
       );
 
       const result = await Promise.race([
-        authService.signUp(email, password, username),
+        authService.signUp(email.trim(), password, username.trim()),
         timeoutPromise,
       ]);
 

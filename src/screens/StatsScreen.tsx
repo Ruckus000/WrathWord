@@ -11,6 +11,7 @@ import {
   Vibration,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {logger} from '../utils/logger';
 import {
   getProfile,
   getStatsForLength,
@@ -72,7 +73,7 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
         const data = await competitionService.getTodayCompetition();
         setCompetitionData(data);
       } catch (err) {
-        console.error('Failed to load competition data:', err);
+        logger.error('Failed to load competition data:', err);
         // Set empty fallback data so CompeteCard still renders
         setCompetitionData({
           userRank: 0,

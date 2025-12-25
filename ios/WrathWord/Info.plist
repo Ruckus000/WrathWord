@@ -30,18 +30,7 @@
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
 	</dict>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Allow connection to the Metro bundler on your local network during development.</string>
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_react-native-http._tcp.</string>
-		<string>_react-native-https._tcp.</string>
-	</array>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Hey can we use your location info if needed?</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UILaunchStoryboardName</key>
