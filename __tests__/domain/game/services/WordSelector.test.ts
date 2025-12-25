@@ -2,13 +2,36 @@
 
 import { WordSelector } from '../../../../src/domain/game/services/WordSelector';
 import { GameConfig } from '../../../../src/domain/game/value-objects/GameConfig';
+import { IWordList } from '../../../../src/domain/game/repositories/IWordList';
+import { ValidLength } from '../../../../src/domain/game/value-objects/GameConfig';
+
+class MockWordList implements IWordList {
+  private testAnswers = ['APPLE', 'BEACH', 'CRANE', 'DOUBT', 'EAGLE', 'FLAME', 'GRAPE', 'HOUSE'];
+
+  getAnswers(length: ValidLength): string[] {
+    return this.testAnswers;
+  }
+
+  isValidGuess(word: string, length: ValidLength): boolean {
+    return true;
+  }
+
+  getAnswerCount(length: ValidLength): number {
+    return this.testAnswers.length;
+  }
+}
 
 describe('WordSelector', () => {
   const testAnswers = ['APPLE', 'BEACH', 'CRANE', 'DOUBT', 'EAGLE', 'FLAME', 'GRAPE', 'HOUSE'];
+  let wordList: IWordList;
+
+  beforeEach(() => {
+    wordList = new MockWordList();
+  });
 
   describe('selectWord', () => {
     it('returns a word from the answers list', () => {
-      const selector = new WordSelector(testAnswers);
+      const selector = new WordSelector(wordList);
       const config = GameConfig.create({ length: 5, maxRows: 6, mode: 'daily', dateISO: '2025-01-15' });
 
       const word = selector.selectWord(config);
@@ -17,7 +40,7 @@ describe('WordSelector', () => {
     });
 
     it('is deterministic for same config', () => {
-      const selector = new WordSelector(testAnswers);
+      const selector = new WordSelector(wordList);
       const config = GameConfig.create({ length: 5, maxRows: 6, mode: 'daily', dateISO: '2025-01-15' });
 
       const word1 = selector.selectWord(config);
@@ -29,7 +52,7 @@ describe('WordSelector', () => {
     });
 
     it('varies by date', () => {
-      const selector = new WordSelector(testAnswers);
+      const selector = new WordSelector(wordList);
       const config1 = GameConfig.create({ length: 5, maxRows: 6, mode: 'daily', dateISO: '2025-01-15' });
       const config2 = GameConfig.create({ length: 5, maxRows: 6, mode: 'daily', dateISO: '2025-01-16' });
 
@@ -50,7 +73,7 @@ describe('WordSelector', () => {
     });
 
     it('varies by maxRows - CRITICAL', () => {
-      const selector = new WordSelector(testAnswers);
+      const selector = new WordSelector(wordList);
       const config1 = GameConfig.create({ length: 5, maxRows: 6, mode: 'daily', dateISO: '2025-01-15' });
       const config2 = GameConfig.create({ length: 5, maxRows: 5, mode: 'daily', dateISO: '2025-01-15' });
 
@@ -62,7 +85,7 @@ describe('WordSelector', () => {
     });
 
     it('varies by length', () => {
-      const selector = new WordSelector(testAnswers);
+      const selector = new WordSelector(wordList);
       const config1 = GameConfig.create({ length: 5, maxRows: 6, mode: 'daily', dateISO: '2025-01-15' });
       const config2 = GameConfig.create({ length: 4, maxRows: 6, mode: 'daily', dateISO: '2025-01-15' });
 
@@ -77,7 +100,7 @@ describe('WordSelector', () => {
 
   describe('uses GameConfig.toSeedString', () => {
     it('produces same result as direct seed calculation', () => {
-      const selector = new WordSelector(testAnswers);
+      const selector = new WordSelector(wordList);
       const config = GameConfig.create({ length: 5, maxRows: 6, mode: 'daily', dateISO: '2025-01-15' });
 
       // The seed should be in format dateISO:length:maxRows
@@ -91,7 +114,12 @@ describe('WordSelector', () => {
 
   describe('edge cases', () => {
     it('handles single-word list', () => {
-      const selector = new WordSelector(['ALONE']);
+      const singleWordList: IWordList = {
+        getAnswers: () => ['ALONE'],
+        isValidGuess: () => true,
+        getAnswerCount: () => 1,
+      };
+      const selector = new WordSelector(singleWordList);
       const config = GameConfig.create({ length: 5, maxRows: 6, mode: 'daily', dateISO: '2025-01-15' });
 
       const word = selector.selectWord(config);
@@ -101,7 +129,12 @@ describe('WordSelector', () => {
 
     it('handles large answer list', () => {
       const largeList = Array.from({ length: 10000 }, (_, i) => `WORD${i.toString().padStart(5, '0')}`);
-      const selector = new WordSelector(largeList);
+      const largeWordList: IWordList = {
+        getAnswers: () => largeList,
+        isValidGuess: () => true,
+        getAnswerCount: () => largeList.length,
+      };
+      const selector = new WordSelector(largeWordList);
       const config = GameConfig.create({ length: 5, maxRows: 6, mode: 'daily', dateISO: '2025-01-15' });
 
       const word = selector.selectWord(config);
@@ -110,7 +143,7 @@ describe('WordSelector', () => {
     });
 
     it('produces varied selection across a week', () => {
-      const selector = new WordSelector(testAnswers);
+      const selector = new WordSelector(wordList);
       const weekDates = ['2025-01-13', '2025-01-14', '2025-01-15', '2025-01-16', '2025-01-17', '2025-01-18', '2025-01-19'];
 
       const words = weekDates.map((date) => {
@@ -125,7 +158,7 @@ describe('WordSelector', () => {
 
   describe('mode independence', () => {
     it('same word for daily and free mode with same config', () => {
-      const selector = new WordSelector(testAnswers);
+      const selector = new WordSelector(wordList);
       const dailyConfig = GameConfig.create({ length: 5, maxRows: 6, mode: 'daily', dateISO: '2025-01-15' });
       const freeConfig = GameConfig.create({ length: 5, maxRows: 6, mode: 'free', dateISO: '2025-01-15' });
 

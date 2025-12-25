@@ -1,6 +1,7 @@
 // src/domain/game/services/WordSelector.ts
 
 import { GameConfig } from '../value-objects/GameConfig';
+import { IWordList } from '../repositories/IWordList';
 
 /**
  * Mulberry32 PRNG - produces deterministic random numbers from a seed.
@@ -35,19 +36,16 @@ function seededIndex(seedStr: string, max: number): number {
  * includes dateISO, length, and maxRows (CRITICAL: maxRows is part of seed!).
  */
 export class WordSelector {
-  private readonly answers: readonly string[];
-
-  constructor(answers: string[]) {
-    this.answers = Object.freeze([...answers]);
-  }
+  constructor(private readonly wordList: IWordList) {}
 
   /**
    * Select a word based on the game configuration.
    * Same config always produces same word.
    */
   selectWord(config: GameConfig): string {
+    const answers = this.wordList.getAnswers(config.length);
     const seedString = config.toSeedString();
-    const idx = seededIndex(seedString, this.answers.length);
-    return this.answers[idx];
+    const idx = seededIndex(seedString, answers.length);
+    return answers[idx];
   }
 }

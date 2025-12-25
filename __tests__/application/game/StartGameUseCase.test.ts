@@ -86,7 +86,7 @@ describe('StartGameUseCase', () => {
     wordList = new MockWordList();
     gameRepo = new MockGameRepository();
     completionRepo = new MockCompletionRepository();
-    wordSelector = new WordSelector(wordList.getAnswers(5));
+    wordSelector = new WordSelector(wordList);
     evaluator = new GuessEvaluator();
     useCase = new StartGameUseCase(wordList, gameRepo, completionRepo, wordSelector, evaluator);
   });
