@@ -37,18 +37,31 @@ npm run ios
 - react-native-safe-area-context
 - react-native-haptic-feedback
 
-## Project Structure
+## Architecture
+
+WrathWord follows Clean Architecture principles. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
+
+### Quick Overview
+
 ```
 src/
-  screens/
-    GameScreen.tsx
-  logic/
-    evaluateGuess.ts
-    selectDaily.ts
-    rng.ts
-    words/
-  storage/
-    mmkv.ts
-  theme/
-    colors.ts
+├── domain/           # Core business logic (no dependencies)
+├── application/      # Use cases (orchestration)
+├── infrastructure/   # External concerns (persistence, APIs)
+├── presentation/     # React Native UI
+└── composition/      # Dependency injection
+```
+
+### Running Tests
+
+```bash
+# All tests
+npm test
+
+# Specific layer
+npm test -- --testPathPattern="domain"
+npm test -- --testPathPattern="application"
+npm test -- --testPathPattern="infrastructure"
+npm test -- --testPathPattern="presentation"
+npm test -- --testPathPattern="e2e"
 ```
