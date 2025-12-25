@@ -1,29 +1,33 @@
 // app/App.tsx
-import React, {useState, useEffect} from 'react';
+import React, {useEffect} from 'react';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {KeyboardProvider} from 'react-native-keyboard-controller';
 import BootSplash from 'react-native-bootsplash';
 
 import {HomeScreen} from '../src/screens/HomeScreen';
-import GameScreen from '../src/screens/GameScreen';
+import GameScreen from '../src/presentation/screens/Game/GameScreen';
 import StatsScreen from '../src/screens/StatsScreen';
 import FriendsScreen from '../src/screens/FriendsScreen';
 import {SignInScreen, SignUpScreen} from '../src/screens/Auth';
 import {AuthProvider, useAuth} from '../src/contexts/AuthContext';
+import {NavigationProvider, useNavigation, useScreenParams} from '../src/presentation/navigation';
 import {FEATURE_FLAGS} from '../src/config/featureFlags';
-
-type Screen = 'home' | 'game' | 'stats' | 'friends' | 'signin' | 'signup';
-type InitialMode = 'daily' | 'free' | null;
 
 function AppContent() {
   const {isAuthenticated, loading, isDevelopmentMode} = useAuth();
+  const {
+    currentScreen,
+    navigateToGame,
+    navigateToStats,
+    navigateToFriends,
+    navigateToHome,
+    navigateToSignIn,
+    navigateToSignUp,
+    reset,
+  } = useNavigation();
 
-  // Determine initial screen based on feature flag
-  const initialScreen: Screen = FEATURE_FLAGS.HOME_SCREEN_ENABLED ? 'home' : 'game';
-  const [currentScreen, setCurrentScreen] = useState<Screen>(initialScreen);
-
-  // Track the mode to pass to GameScreen
-  const [initialMode, setInitialMode] = useState<InitialMode>(null);
+  // Get screen params for game screen
+  const gameParams = useScreenParams<'game'>();
 
   // Hide splash screen when auth loading completes
   useEffect(() => {
@@ -42,72 +46,62 @@ function AppContent() {
     if (currentScreen === 'signup') {
       return (
         <SignUpScreen
-          onSignUpSuccess={() => setCurrentScreen(initialScreen)}
-          onNavigateToSignIn={() => setCurrentScreen('signin')}
+          onSignUpSuccess={() => reset(FEATURE_FLAGS.HOME_SCREEN_ENABLED ? 'home' : 'game')}
+          onNavigateToSignIn={navigateToSignIn}
         />
       );
     }
 
     return (
       <SignInScreen
-        onSignInSuccess={() => setCurrentScreen(initialScreen)}
-        onNavigateToSignUp={() => setCurrentScreen('signup')}
+        onSignInSuccess={() => reset(FEATURE_FLAGS.HOME_SCREEN_ENABLED ? 'home' : 'game')}
+        onNavigateToSignUp={navigateToSignUp}
       />
     );
   }
 
   // Main app screens (authenticated or dev mode)
 
-  // HomeScreen (new entry point when feature flag enabled)
+  // HomeScreen
   if (currentScreen === 'home') {
     return (
       <HomeScreen
-        onPlayDaily={() => {
-          setInitialMode('daily');
-          setCurrentScreen('game');
-        }}
-        onContinueGame={() => {
-          setInitialMode(null); // Let GameScreen restore from storage
-          setCurrentScreen('game');
-        }}
-        onFreePlay={() => {
-          setInitialMode('free'); // Triggers NewGameModal
-          setCurrentScreen('game');
-        }}
-        onNavigateToStats={() => setCurrentScreen('stats')}
-        onNavigateToFriends={() => setCurrentScreen('friends')}
+        onPlayDaily={() => navigateToGame('daily')}
+        onContinueGame={() => navigateToGame(null)}
+        onFreePlay={() => navigateToGame('free')}
+        onNavigateToStats={navigateToStats}
+        onNavigateToFriends={navigateToFriends}
       />
     );
   }
 
+  // FriendsScreen
   if (currentScreen === 'friends') {
     return (
       <FriendsScreen
-        onBack={() => setCurrentScreen('stats')}
-        onPlayNow={() => {
-          setInitialMode(null);
-          setCurrentScreen('game');
-        }}
+        onBack={navigateToStats}
+        onPlayNow={() => navigateToGame(null)}
       />
     );
   }
 
+  // StatsScreen
   if (currentScreen === 'stats') {
     return (
       <StatsScreen
-        onBack={() => setCurrentScreen(FEATURE_FLAGS.HOME_SCREEN_ENABLED ? 'home' : 'game')}
-        onNavigateToFriends={() => setCurrentScreen('friends')}
+        onBack={() => FEATURE_FLAGS.HOME_SCREEN_ENABLED ? navigateToHome() : navigateToGame(null)}
+        onNavigateToFriends={navigateToFriends}
       />
     );
   }
 
-  // GameScreen
+  // GameScreen (default)
   return (
     <GameScreen
-      initialMode={initialMode}
+      initialMode={gameParams?.initialMode}
       onNavigateToStats={() => {
-        console.log('[App] onNavigateToStats called, switching to stats');
-        setCurrentScreen('stats');
+        console.log('[App] onNavigateToStats called');
+        navigateToStats();
       }}
     />
   );
@@ -118,7 +112,9 @@ export default function App() {
     <KeyboardProvider>
       <SafeAreaProvider>
         <AuthProvider>
-          <AppContent />
+          <NavigationProvider>
+            <AppContent />
+          </NavigationProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </KeyboardProvider>
