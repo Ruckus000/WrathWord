@@ -134,7 +134,7 @@ After all waves complete:
 
 ## Reference Documents
 
-- **Full Plan:** `/mnt/project/wrathword-tdd-refactoring-plan.md`
+- **Full Plan:** `docs/architecture/TDD_REFACTORING_PLAN.md`
 - **Progress Tracker:** `.claude/refactor/REFACTOR_PROGRESS.md`
 - **Parallel Guide:** `.claude/refactor/PHASE_5_PARALLEL.md`
 
