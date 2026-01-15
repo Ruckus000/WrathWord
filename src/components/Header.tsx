@@ -1,88 +1,102 @@
 // src/components/Header.tsx
-import React from 'react';
+import React, {useCallback} from 'react';
 import {View, Text, StyleSheet, Pressable} from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {palette} from '../theme/colors';
 import {logger} from '../utils/logger';
+import {SettingsGearIcon, HelpCircleIcon} from './icons/HeaderIcons';
+import {PlusIcon} from './icons/SettingsIcons';
 
 type Props = {
   mode: 'daily' | 'free';
-  length: number;
-  maxRows: number;
-  formattedDate?: string;
   onMenuPress?: () => void;
   onNewGamePress: () => void;
-  onHintPress?: () => void;
-  hintDisabled?: boolean;
+  onHelpPress?: () => void;
 };
 
-export default function Header({
-  mode,
-  length,
-  maxRows,
-  formattedDate,
-  onMenuPress,
-  onNewGamePress,
-  onHintPress,
-  hintDisabled,
-}: Props) {
+function Header({mode, onMenuPress, onNewGamePress, onHelpPress}: Props) {
+  const handleMenuPress = useCallback(() => {
+    logger.log('[Header] Settings button pressed');
+    onMenuPress?.();
+  }, [onMenuPress]);
+
+  const handleHelpPress = useCallback(() => {
+    logger.log('[Header] Help button pressed');
+    onHelpPress?.();
+  }, [onHelpPress]);
+
+  const handleNewGamePress = useCallback(() => {
+    logger.log('[Header] New button pressed');
+    onNewGamePress();
+  }, [onNewGamePress]);
+
   return (
     <View style={styles.header}>
+      {/* Left: Settings */}
       <View style={styles.headerLeft}>
         {onMenuPress && (
           <Pressable
-            style={styles.menuBtn}
-            onPress={() => {
-              logger.log('[Header] Settings button pressed');
-              onMenuPress();
-            }}
+            style={({pressed}) => [
+              styles.iconBtnBase,
+              styles.settingsBtn,
+              pressed && styles.settingsBtnPressed,
+            ]}
+            onPress={handleMenuPress}
             accessibilityLabel="Settings"
             accessibilityRole="button">
-            <Text style={styles.menuIcon}>⚙️</Text>
+            <SettingsGearIcon size={20} color={palette.textMuted} />
           </Pressable>
         )}
       </View>
 
+      {/* Center: Mode indicator */}
       <View style={styles.gameInfo}>
-        <View style={[styles.modeIndicator, mode === 'free' && styles.modeIndicatorFree]}>
+        <View style={styles.modeIndicator}>
           <View style={[styles.modeDot, mode === 'free' && styles.modeDotFree]} />
-          <Text style={styles.modeText} numberOfLines={1}>{mode === 'daily' ? 'Daily' : 'Free'}</Text>
+          <Text style={styles.modeText} numberOfLines={1}>
+            {mode === 'daily' ? 'Daily' : 'Free'}
+          </Text>
         </View>
       </View>
 
+      {/* Right: Help + New */}
       <View style={styles.headerRight}>
-        {onHintPress && (
+        {onHelpPress && (
           <Pressable
-            style={[styles.hintBtn, hintDisabled && styles.hintBtnDisabled]}
-            onPress={() => {
-              logger.log('[Header] Hint button pressed, hintDisabled:', hintDisabled);
-              if (!hintDisabled) {
-                onHintPress();
-              }
-            }}
-            disabled={hintDisabled}
-            accessibilityLabel={hintDisabled ? 'Hint already used' : 'Use hint to reveal one letter'}
-            accessibilityRole="button"
-            accessibilityState={{disabled: hintDisabled}}>
-            <Text style={styles.hintIcon}>💡</Text>
+            style={({pressed}) => [
+              styles.iconBtnBase,
+              styles.helpBtn,
+              pressed && styles.helpBtnPressed,
+            ]}
+            onPress={handleHelpPress}
+            accessibilityLabel="Help"
+            accessibilityHint="Use hint or learn how to play"
+            accessibilityRole="button">
+            <HelpCircleIcon size={18} color={palette.textMuted} />
           </Pressable>
         )}
-        <Pressable onPress={() => {
-          logger.log('[Header] New button pressed');
-          onNewGamePress();
-        }}>
+        <Pressable
+          style={({pressed}) => [
+            styles.newGameBtnWrapper,
+            pressed && styles.newGameBtnPressed,
+          ]}
+          onPress={handleNewGamePress}
+          accessibilityLabel="New game"
+          accessibilityRole="button">
           <LinearGradient
             colors={[palette.gradientStart, palette.gradientEnd]}
             start={{x: 0, y: 0}}
             end={{x: 1, y: 1}}
-            style={styles.newGameBtn}>
-            <Text style={styles.newGameBtnText}>New</Text>
+            style={styles.newGameBtnGradient}>
+            <PlusIcon size={18} color={palette.textPrimary} />
           </LinearGradient>
         </Pressable>
       </View>
     </View>
   );
 }
+
+export default React.memo(Header);
 
 const styles = StyleSheet.create({
   header: {
@@ -99,27 +113,32 @@ const styles = StyleSheet.create({
     left: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
   },
-  menuBtn: {
+
+  // Shared base for 40x40 icon buttons (DRY)
+  iconBtnBase: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: palette.tileEmpty,
-    borderWidth: 1,
-    borderColor: palette.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  menuIcon: {
-    fontSize: 20,
-    color: palette.textPrimary,
+
+  // Settings button specifics
+  settingsBtn: {
+    backgroundColor: palette.tileEmpty,
+    borderWidth: 1,
+    borderColor: palette.borderLight,
   },
+  settingsBtnPressed: {
+    backgroundColor: palette.keyPressed,
+  },
+
+  // Center mode indicator
   gameInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
   },
   modeIndicator: {
     flexDirection: 'row',
@@ -131,9 +150,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.borderLight,
     borderRadius: 20,
-  },
-  modeIndicatorFree: {
-    // Could have different styling for free mode
   },
   modeDot: {
     width: 6,
@@ -149,41 +165,40 @@ const styles = StyleSheet.create({
     color: palette.textMuted,
     fontWeight: '500',
   },
+
+  // Right section
   headerRight: {
     position: 'absolute',
     right: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
   },
-  newGameBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  newGameBtnText: {
-    color: palette.textPrimary,
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  hintBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+
+  // Help button specifics
+  helpBtn: {
     backgroundColor: palette.accentPurpleLight,
     borderWidth: 1,
     borderColor: palette.accentPurpleBorder,
+  },
+  helpBtnPressed: {
+    backgroundColor: palette.accentPurpleBorder,
+  },
+
+  // New game button - wrapper pattern (matches ResultModal)
+  newGameBtnWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  newGameBtnGradient: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hintBtnDisabled: {
-    backgroundColor: palette.tileEmpty,
-    borderColor: palette.borderLight,
-    opacity: 0.4,
-  },
-  hintIcon: {
-    fontSize: 18,
+  newGameBtnPressed: {
+    opacity: 0.8,
+    transform: [{scale: 0.96}],
   },
 });

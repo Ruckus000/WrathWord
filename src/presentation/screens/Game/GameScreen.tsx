@@ -7,6 +7,8 @@ import { NewGameModal } from '../../../components/NewGameModal';
 import { Board } from '../../../components/Board';
 import { Keyboard } from '../../../components/Keyboard';
 import { ResultModal } from '../../../components/ResultModal';
+import { HelpPopover } from '../../../components/HelpPopover';
+import { TutorialModal } from '../../../components/TutorialModal';
 import { palette } from '../../../theme/colors';
 import { getTileColors } from '../../../theme/getColors';
 
@@ -21,10 +23,12 @@ export default function GameScreen({ onNavigateToStats, initialMode }: GameScree
   const {
     length, maxRows, mode, dateISO, answer, rows, feedback, current, status,
     hintUsed, hintedCell, hintedLetter, showResult, showSettings, errorMsg,
-    staleGameWarning, keyStates, hintDisabled, gameInProgress, formattedDate,
+    staleGameWarning, keyStates, hintDisabled, gameInProgress,
+    showHelpPopover, showTutorial,
     onKey, handleHint, handleNewGame, handleNewGameStart, handleCancel,
     handleGiveUp, handleStartTodaysPuzzle, handleFinishCurrentGame,
-    closeResult, playAgain, shakeAnim,
+    closeResult, playAgain, handleHelpPress, handleCloseHelpPopover,
+    handleOpenTutorial, handleCloseTutorial, shakeAnim,
   } = useGameSession({ initialMode });
   const playAgainIsFreeMode = mode === 'daily';
 
@@ -32,13 +36,9 @@ export default function GameScreen({ onNavigateToStats, initialMode }: GameScree
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Header
         mode={mode}
-        length={length}
-        maxRows={maxRows}
-        formattedDate={formattedDate}
         onMenuPress={onNavigateToStats}
         onNewGamePress={handleNewGame}
-        onHintPress={handleHint}
-        hintDisabled={hintDisabled}
+        onHelpPress={handleHelpPress}
       />
       {errorMsg ? (
         <View style={styles.errorContainer}>
@@ -83,6 +83,17 @@ export default function GameScreen({ onNavigateToStats, initialMode }: GameScree
         tileColors={tileColors}
         playAgainIsFreeMode={playAgainIsFreeMode}
         onPlayAgain={playAgain}
+      />
+      <HelpPopover
+        visible={showHelpPopover}
+        onClose={handleCloseHelpPopover}
+        onHintPress={handleHint}
+        onTutorialPress={handleOpenTutorial}
+        hintDisabled={hintDisabled}
+      />
+      <TutorialModal
+        visible={showTutorial}
+        onClose={handleCloseTutorial}
       />
     </View>
   );
