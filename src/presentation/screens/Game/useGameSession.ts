@@ -15,6 +15,8 @@ import { getWordList } from '../../../infrastructure/words/StaticWordList';
 // Existing utilities (keep using until Phase 5 cleanup)
 import { triggerImpact, triggerNotification } from '../../../utils/haptics';
 import { getJSON, setJSON } from '../../../storage/mmkv';
+import { getScopedKey } from '../../../storage/userScope';
+import { tutorialTrigger } from '../../../services/tutorialTrigger';
 import { selectDaily } from '../../../logic/selectDaily';
 import { useToday } from '../../../hooks/useToday';
 import { gameResultsService } from '../../../services/data';
@@ -52,6 +54,10 @@ export interface UseGameSessionReturn {
   errorMsg: string;
   staleGameWarning: boolean;
 
+  // Help UI state
+  showHelpPopover: boolean;
+  showTutorial: boolean;
+
   // Derived state
   keyStates: Map<string, TileStateValue>;
   hintDisabled: boolean;
@@ -69,6 +75,12 @@ export interface UseGameSessionReturn {
   handleFinishCurrentGame: () => void;
   closeResult: () => void;
   playAgain: () => void;
+
+  // Help actions
+  handleHelpPress: () => void;
+  handleCloseHelpPopover: () => void;
+  handleOpenTutorial: () => void;
+  handleCloseTutorial: () => void;
 
   // For animation (passed to UI)
   shakeAnim: Animated.Value;
@@ -112,6 +124,10 @@ export function useGameSession(options: UseGameSessionOptions = {}): UseGameSess
   const [showSettings, setShowSettings] = useState(firstLaunchRef.current);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [staleGameWarning, setStaleGameWarning] = useState(false);
+
+  // Help UI state
+  const [showHelpPopover, setShowHelpPopover] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   // Refs
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -531,6 +547,28 @@ export function useGameSession(options: UseGameSessionOptions = {}): UseGameSess
     loadNew();
   }, [loadNew]);
 
+  // Help popover and tutorial handlers
+  const handleHelpPress = useCallback(() => {
+    setShowHelpPopover(true);
+  }, []);
+
+  const handleCloseHelpPopover = useCallback(() => {
+    setShowHelpPopover(false);
+  }, []);
+
+  const handleOpenTutorial = useCallback(() => {
+    setShowTutorial(true);
+  }, []);
+
+  const handleCloseTutorial = useCallback(() => {
+    setShowTutorial(false);
+    // Mark tutorial as seen using user-scoped key
+    const key = getScopedKey('hasSeenTutorial');
+    if (key) {
+      setJSON(key, true);
+    }
+  }, []);
+
   // === EFFECTS ===
 
   // Persist settings
@@ -665,6 +703,14 @@ export function useGameSession(options: UseGameSessionOptions = {}): UseGameSess
     // If initialMode is null, let normal restoration happen (already handled by main init)
   }, [initialMode, loadNew]);
 
+  // Subscribe to tutorial trigger (for first-time user auto-show)
+  useEffect(() => {
+    const unsubscribe = tutorialTrigger.subscribe(() => {
+      setShowTutorial(true);
+    });
+    return unsubscribe;
+  }, []);
+
   // Detect stale daily game
   useEffect(() => {
     // Skip if: no session, not daily mode, or game already finished
@@ -709,6 +755,10 @@ export function useGameSession(options: UseGameSessionOptions = {}): UseGameSess
     errorMsg,
     staleGameWarning,
 
+    // Help UI state
+    showHelpPopover,
+    showTutorial,
+
     // Derived
     keyStates,
     hintDisabled,
@@ -726,6 +776,12 @@ export function useGameSession(options: UseGameSessionOptions = {}): UseGameSess
     handleFinishCurrentGame,
     closeResult,
     playAgain,
+
+    // Help actions
+    handleHelpPress,
+    handleCloseHelpPopover,
+    handleOpenTutorial,
+    handleCloseTutorial,
 
     // Animation
     shakeAnim,

@@ -133,12 +133,13 @@ export const ResultModal = React.memo(({
             <Pressable style={styles.btnShare} onPress={handleShare}>
               <Text style={styles.btnShareText}>Share</Text>
             </Pressable>
-            <Pressable onPress={onPlayAgain}>
+            {/* Pressable handles layout (flex), LinearGradient handles visuals only */}
+            <Pressable style={styles.btnPlayAgainWrapper} onPress={onPlayAgain}>
               <LinearGradient
                 colors={[palette.gradientStart, palette.gradientEnd]}
                 start={{x: 0, y: 0}}
                 end={{x: 1, y: 1}}
-                style={styles.btnPlayAgain}>
+                style={styles.btnPlayAgainGradient}>
                 <Text style={styles.btnPlayAgainText}>
                   {playAgainIsFreeMode ? 'Play Free Mode' : 'Play Again'}
                 </Text>

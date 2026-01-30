@@ -1,6 +1,6 @@
 /**
  * Authentication Context
- * 
+ *
  * Provides authentication state throughout the app.
  * Automatically switches between mock and real auth based on environment.
  */
@@ -15,8 +15,10 @@ import React, {
 import {AppState, AppStateStatus} from 'react-native';
 import {authService, AuthSession, AuthUser} from '../services/auth';
 import {isDevelopment} from '../config/environment';
-import {setCurrentUserId} from '../storage/userScope';
+import {setCurrentUserId, getScopedKey} from '../storage/userScope';
+import {getJSON} from '../storage/mmkv';
 import {friendsService, getProfileService} from '../services/data';
+import {tutorialTrigger} from '../services/tutorialTrigger';
 import {getSupabase, setCachedSession} from '../services/supabase/client';
 import {logger} from '../utils/logger';
 
@@ -64,14 +66,26 @@ export function AuthProvider({children}: AuthProviderProps) {
       // This populates the cache so FriendsScreen loads instantly
       // Pass userId and accessToken for direct API calls (bypasses Supabase JS client)
       friendsService.getFriends(undefined, session.user.id, session.accessToken ?? undefined).catch(err => {
-        logger.log('Background friends pre-fetch failed:', err);
+        logger.error('Background friends pre-fetch failed:', err);
       });
 
       // Sync local stats to DB on login (fire-and-forget)
       // This pushes any existing local game data to the cloud
       getProfileService().syncStats().catch(err => {
-        logger.log('[AuthContext] Background stats sync failed:', err);
+        logger.error('[AuthContext] Background stats sync failed:', err);
       });
+
+      // Check if this user has seen the tutorial
+      const tutorialKey = getScopedKey('hasSeenTutorial');
+      if (tutorialKey) {
+        const hasSeenTutorial = getJSON(tutorialKey, false);
+        if (!hasSeenTutorial) {
+          // First-time user - trigger tutorial after small delay
+          // Delay ensures GameScreen is mounted and subscribed
+          logger.log('[AuthContext] First-time user detected, triggering tutorial');
+          setTimeout(() => tutorialTrigger.trigger(), 500);
+        }
+      }
     } else {
       // No user signed in - clear user ID
       setCurrentUserId(null);
@@ -188,16 +202,3 @@ export function AuthProvider({children}: AuthProviderProps) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -178,8 +178,14 @@ export const styles = StyleSheet.create({
     fontWeight: '600',
     color: palette.accentPurple,
   },
-  btnPlayAgain: {
+  // Wrapper handles layout (flex) in the button row
+  btnPlayAgainWrapper: {
     flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  // Gradient handles visuals only (padding, alignment)
+  btnPlayAgainGradient: {
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 12,
