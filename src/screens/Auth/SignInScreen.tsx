@@ -265,14 +265,15 @@ export default function SignInScreen({
           </Pressable>
         </View>
 
-        {/* Divider */}
+        {/* Divider - commented out until social login is implemented
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
           <Text style={styles.dividerText}>or continue with</Text>
           <View style={styles.dividerLine} />
         </View>
+        */}
 
-        {/* Social Buttons */}
+        {/* Social Buttons - commented out until social login is implemented
         <View style={styles.socialButtons}>
           <Pressable
             onPress={handleSocialLogin}
@@ -293,6 +294,7 @@ export default function SignInScreen({
             <Text style={styles.socialButtonText}>Apple</Text>
           </Pressable>
         </View>
+        */}
 
         {/* Footer */}
         <View style={styles.footer}>
