@@ -26,6 +26,7 @@ import Svg, {Path, Rect} from 'react-native-svg';
 type Props = {
   onSignUpSuccess: () => void;
   onNavigateToSignIn: () => void;
+  onBack?: () => void;
 };
 
 // Email validation regex
@@ -64,6 +65,7 @@ function EmailConfirmIcon() {
 export default function SignUpScreen({
   onSignUpSuccess,
   onNavigateToSignIn,
+  onBack,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
@@ -213,11 +215,25 @@ export default function SignUpScreen({
       ]}>
       <AuthBackground />
 
-      <View style={styles.content}>
-        {/* Back Button */}
-        <Pressable style={styles.backButton} onPress={onNavigateToSignIn}>
-          <ChevronLeft size={24} color={palette.textPrimary} />
+      {/* Close button - only shown when accessed from in-app (onBack provided) */}
+      {onBack && (
+        <Pressable
+          style={styles.closeButton}
+          onPress={onBack}
+          disabled={loading}>
+          <Text style={styles.closeButtonText}>✕</Text>
         </Pressable>
+      )}
+
+      <View style={styles.content}>
+        {/* Back Button - only show if accessed from sign-in (no onBack) */}
+        {!onBack && (
+          <Pressable style={styles.backButton} onPress={onNavigateToSignIn}>
+            <ChevronLeft size={24} color={palette.textPrimary} />
+          </Pressable>
+        )}
+        {/* Add spacer when onBack is provided to maintain layout */}
+        {onBack && <View style={styles.backButtonSpacer} />}
 
         {/* Header */}
         <View style={styles.header}>
@@ -335,6 +351,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: palette.bg,
   },
+  closeButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.cardBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  closeButtonText: {
+    fontSize: 18,
+    color: palette.textMuted,
+    fontWeight: '300',
+  },
   content: {
     flex: 1,
     paddingHorizontal: 24,
@@ -345,6 +380,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 8,
     marginBottom: 8,
+  },
+  backButtonSpacer: {
+    height: 56,
   },
   header: {
     alignItems: 'center',

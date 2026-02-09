@@ -36,36 +36,38 @@ function AppContent() {
     }
   }, [loading]);
 
+  // Auto-enter guest mode on first launch if not authenticated
+  useEffect(() => {
+    if (!loading && !isAuthenticated && !isGuest && !isDevelopmentMode) {
+      enterGuestMode();
+    }
+  }, [loading, isAuthenticated, isGuest, isDevelopmentMode, enterGuestMode]);
+
   // Keep showing splash while loading (return null keeps bootsplash visible)
   if (loading) {
     return null;
   }
 
-  // Check if user can access the app (authenticated, guest, or dev mode)
-  const canAccessApp = isDevelopmentMode || isAuthenticated || isGuest;
+  // Helper for navigating to home/game based on feature flag
+  const defaultScreen = FEATURE_FLAGS.HOME_SCREEN_ENABLED ? 'home' : 'game';
 
-  // Handle guest mode entry
-  const handleContinueAsGuest = () => {
-    enterGuestMode();
-    reset(FEATURE_FLAGS.HOME_SCREEN_ENABLED ? 'home' : 'game');
-  };
-
-  // In production mode, show auth screens if not authenticated and not guest
-  if (!canAccessApp) {
-    if (currentScreen === 'signup') {
-      return (
-        <SignUpScreen
-          onSignUpSuccess={() => reset(FEATURE_FLAGS.HOME_SCREEN_ENABLED ? 'home' : 'game')}
-          onNavigateToSignIn={navigateToSignIn}
-        />
-      );
-    }
-
+  // Auth screens (accessible via navigation, not gated)
+  if (currentScreen === 'signin') {
     return (
       <SignInScreen
-        onSignInSuccess={() => reset(FEATURE_FLAGS.HOME_SCREEN_ENABLED ? 'home' : 'game')}
+        onSignInSuccess={() => reset(defaultScreen)}
         onNavigateToSignUp={navigateToSignUp}
-        onContinueAsGuest={handleContinueAsGuest}
+        onBack={() => reset(defaultScreen)}
+      />
+    );
+  }
+
+  if (currentScreen === 'signup') {
+    return (
+      <SignUpScreen
+        onSignUpSuccess={() => reset(defaultScreen)}
+        onNavigateToSignIn={navigateToSignIn}
+        onBack={() => reset(defaultScreen)}
       />
     );
   }
@@ -121,6 +123,8 @@ function AppContent() {
         console.log('[App] onNavigateToStats called');
         navigateToStats();
       }}
+      onNavigateToSignIn={navigateToSignIn}
+      onNavigateToSignUp={navigateToSignUp}
     />
   );
 }

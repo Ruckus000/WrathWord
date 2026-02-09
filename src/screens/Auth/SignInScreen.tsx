@@ -27,6 +27,7 @@ type Props = {
   onSignInSuccess: () => void;
   onNavigateToSignUp: () => void;
   onContinueAsGuest?: () => void;
+  onBack?: () => void;
 };
 
 // Email validation regex
@@ -75,6 +76,7 @@ export default function SignInScreen({
   onSignInSuccess,
   onNavigateToSignUp,
   onContinueAsGuest,
+  onBack,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
@@ -182,6 +184,16 @@ export default function SignInScreen({
         {paddingTop: insets.top, paddingBottom: insets.bottom},
       ]}>
       <AuthBackground />
+
+      {/* Close button - only shown when accessed from in-app (onBack provided) */}
+      {onBack && (
+        <Pressable
+          style={styles.closeButton}
+          onPress={onBack}
+          disabled={loading}>
+          <Text style={styles.closeButtonText}>✕</Text>
+        </Pressable>
+      )}
 
       <View style={styles.content}>
         {/* Brand Header */}
@@ -306,8 +318,8 @@ export default function SignInScreen({
           </Pressable>
         </View>
 
-        {/* Guest Mode */}
-        {onContinueAsGuest && (
+        {/* Guest Mode - only show if NOT accessed from in-app (no onBack) */}
+        {onContinueAsGuest && !onBack && (
           <Pressable
             onPress={onContinueAsGuest}
             style={styles.guestButton}
@@ -324,6 +336,25 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: palette.bg,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.cardBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  closeButtonText: {
+    fontSize: 18,
+    color: palette.textMuted,
+    fontWeight: '300',
   },
   content: {
     flex: 1,

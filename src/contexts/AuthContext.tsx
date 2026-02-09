@@ -184,19 +184,13 @@ export function AuthProvider({children}: AuthProviderProps) {
   }, []);
 
   const handleSignOut = async () => {
-    logger.log('[AuthContext] Signing out - clearing session data');
+    logger.log('[AuthContext] Signing out - transitioning to guest mode');
 
     // Clear cached session first (prevents stale token usage)
     setCachedSession(null);
 
-    // Clear user-scoped storage (setCurrentUserId(null) is called in useEffect when session becomes null)
+    // Clear user-scoped storage
     setCurrentUserId(null);
-
-    // Clear guest mode if active
-    if (isGuest) {
-      clearGuestMode();
-      setIsGuest(false);
-    }
 
     // Sign out from auth service
     await authService.signOut();
@@ -204,7 +198,11 @@ export function AuthProvider({children}: AuthProviderProps) {
     // Update local state
     setSession(null);
 
-    logger.log('[AuthContext] Sign out complete');
+    // Re-enter guest mode so user stays in app (not shown auth screen)
+    setGuestMode();
+    setIsGuest(true);
+
+    logger.log('[AuthContext] Sign out complete - now in guest mode');
   };
 
   const handleDeleteAccount = async (): Promise<{success: boolean; error?: string; errorCode?: string}> => {

@@ -24,6 +24,9 @@ export const ResultModal = React.memo(({
   tileColors,
   playAgainIsFreeMode,
   onPlayAgain,
+  isGuest,
+  onSignIn,
+  onSignUp,
 }: ResultModalProps) => {
   const handleShare = async () => {
     const shareData = generateShareText({
@@ -146,6 +149,23 @@ export const ResultModal = React.memo(({
               </LinearGradient>
             </Pressable>
           </View>
+
+          {/* Sign In Prompt for Guests */}
+          {isGuest && onSignIn && onSignUp && (
+            <View style={styles.authPromptSection}>
+              <Text style={styles.authPromptText}>
+                Create an account to save your progress and compete with friends
+              </Text>
+              <View style={styles.authPromptButtons}>
+                <Pressable style={styles.authPromptButton} onPress={onSignUp}>
+                  <Text style={styles.authPromptButtonText}>Create Account</Text>
+                </Pressable>
+                <Pressable style={styles.authPromptButtonSecondary} onPress={onSignIn}>
+                  <Text style={styles.authPromptButtonTextSecondary}>Sign In</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
         </View>
       </View>
     </Modal>

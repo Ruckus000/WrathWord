@@ -196,4 +196,50 @@ export const styles = StyleSheet.create({
     fontWeight: '600',
     color: palette.textPrimary,
   },
+  // Auth prompt styles for guests
+  authPromptSection: {
+    marginTop: 24,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: palette.cardBorder,
+    alignItems: 'center',
+  },
+  authPromptText: {
+    fontSize: 14,
+    color: palette.textMuted,
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  authPromptButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  authPromptButton: {
+    flex: 1,
+    backgroundColor: palette.primary,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  authPromptButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: palette.textPrimary,
+  },
+  authPromptButtonSecondary: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: palette.cardBorder,
+    alignItems: 'center',
+  },
+  authPromptButtonTextSecondary: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: palette.textMuted,
+  },
 });

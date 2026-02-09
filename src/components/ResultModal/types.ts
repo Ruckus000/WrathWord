@@ -18,4 +18,9 @@ export type ResultModalProps = {
   tileColors: TileColors;
   playAgainIsFreeMode: boolean;
   onPlayAgain: () => void;
+
+  // Auth prompt props (optional - only shown for guests)
+  isGuest?: boolean;
+  onSignIn?: () => void;
+  onSignUp?: () => void;
 };

@@ -703,7 +703,20 @@ export function useGameSession(options: UseGameSessionOptions = {}): UseGameSess
     // If initialMode is null, let normal restoration happen (already handled by main init)
   }, [initialMode, loadNew]);
 
-  // Subscribe to tutorial trigger (for first-time user auto-show)
+  // Check if first-time user and show tutorial on mount
+  // This handles guest users who land on GameScreen from HomeScreen
+  useEffect(() => {
+    const tutorialKey = getScopedKey('hasSeenTutorial');
+    if (tutorialKey) {
+      const hasSeenTutorial = getJSON(tutorialKey, false);
+      if (!hasSeenTutorial) {
+        logger.log('[useGameSession] First-time user, showing tutorial');
+        setShowTutorial(true);
+      }
+    }
+  }, []); // Empty deps - only run on mount
+
+  // Subscribe to tutorial trigger (for authenticated user flow from AuthContext)
   useEffect(() => {
     const unsubscribe = tutorialTrigger.subscribe(() => {
       setShowTutorial(true);

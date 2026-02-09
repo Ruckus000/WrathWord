@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Animated, Modal, Text, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGameSession } from './useGameSession';
+import { useAuth } from '../../../contexts/AuthContext';
 import Header from '../../../components/Header';
 import { NewGameModal } from '../../../components/NewGameModal';
 import { Board } from '../../../components/Board';
@@ -14,12 +15,15 @@ import { getTileColors } from '../../../theme/getColors';
 
 interface GameScreenProps {
   onNavigateToStats?: () => void;
+  onNavigateToSignIn?: () => void;
+  onNavigateToSignUp?: () => void;
   initialMode?: 'daily' | 'free' | null;
 }
 
-export default function GameScreen({ onNavigateToStats, initialMode }: GameScreenProps) {
+export default function GameScreen({ onNavigateToStats, onNavigateToSignIn, onNavigateToSignUp, initialMode }: GameScreenProps) {
   const insets = useSafeAreaInsets();
   const tileColors = getTileColors();
+  const { isGuest } = useAuth();
   const {
     length, maxRows, mode, dateISO, answer, rows, feedback, current, status,
     hintUsed, hintedCell, hintedLetter, showResult, showSettings, errorMsg,
@@ -83,6 +87,9 @@ export default function GameScreen({ onNavigateToStats, initialMode }: GameScree
         tileColors={tileColors}
         playAgainIsFreeMode={playAgainIsFreeMode}
         onPlayAgain={playAgain}
+        isGuest={isGuest}
+        onSignIn={onNavigateToSignIn}
+        onSignUp={onNavigateToSignUp}
       />
       <HelpPopover
         visible={showHelpPopover}
