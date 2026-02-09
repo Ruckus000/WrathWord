@@ -166,9 +166,11 @@ export default function SignUpScreen({
           styles.container,
           {paddingTop: insets.top, paddingBottom: insets.bottom},
         ]}>
-        <AuthBackground />
         <View style={confirmStyles.container}>
-          <EmailConfirmIcon />
+          <View style={confirmStyles.iconWrapper}>
+            <View style={confirmStyles.iconGlow} />
+            <EmailConfirmIcon />
+          </View>
           <Text style={confirmStyles.title}>Check Your Email</Text>
           <Text style={confirmStyles.text}>
             We sent a confirmation link to{'\n'}
@@ -435,15 +437,27 @@ const confirmStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
+    paddingBottom: 60,
+  },
+  iconWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 28,
+  },
+  iconGlow: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(62, 184, 176, 0.08)',
   },
   iconContainer: {
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: palette.accentTealDim,
+    backgroundColor: 'rgba(62, 184, 176, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
   },
   title: {
     fontSize: 28,
