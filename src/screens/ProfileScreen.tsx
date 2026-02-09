@@ -30,12 +30,13 @@ type Props = {
 
 export default function ProfileScreen({onClose}: Props) {
   const insets = useSafeAreaInsets();
-  const {user, signOut} = useAuth();
+  const {user, signOut, deleteAccount} = useAuth();
 
   const [displayName, setDisplayName] = useState(
     user?.displayName || user?.username || '',
   );
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -102,6 +103,58 @@ export default function ProfileScreen({onClose}: Props) {
         },
       },
     ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all associated data including:\n\n' +
+        '• Game history and statistics\n' +
+        '• Friends and friend requests\n' +
+        '• Leaderboard entries\n\n' +
+        'This action cannot be undone.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: () => confirmDeleteAccount(),
+        },
+      ],
+    );
+  };
+
+  const confirmDeleteAccount = () => {
+    Alert.prompt(
+      'Confirm Deletion',
+      'Type "DELETE" to permanently delete your account',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async (text?: string) => {
+            if (text?.toUpperCase() === 'DELETE') {
+              setIsDeleting(true);
+              const result = await deleteAccount();
+              setIsDeleting(false);
+
+              if (!result.success) {
+                const message =
+                  result.errorCode === 'NOT_AUTHENTICATED' || result.errorCode === 'NO_TOKEN'
+                    ? 'Session expired. Please sign in again, then retry account deletion.'
+                    : result.error || 'Failed to delete account';
+                Alert.alert('Error', message);
+              }
+              // On success, AuthContext will update, triggering navigation to sign-in
+            } else {
+              Alert.alert('Cancelled', 'Account deletion cancelled - text did not match.');
+            }
+          },
+        },
+      ],
+      'plain-text',
+    );
   };
 
   const avatarLetter = (displayName || user?.username || 'W').charAt(0);
@@ -191,6 +244,18 @@ export default function ProfileScreen({onClose}: Props) {
       {/* Sign Out */}
       <Pressable style={styles.signOutButton} onPress={handleSignOut}>
         <Text style={styles.signOutText}>Sign Out</Text>
+      </Pressable>
+
+      {/* Delete Account */}
+      <Pressable
+        style={styles.deleteAccountButton}
+        onPress={handleDeleteAccount}
+        disabled={isDeleting}>
+        {isDeleting ? (
+          <ActivityIndicator color={palette.destructive} size="small" />
+        ) : (
+          <Text style={styles.deleteAccountText}>Delete Account</Text>
+        )}
       </Pressable>
     </View>
   );
@@ -328,11 +393,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     marginTop: 'auto',
-    marginBottom: 24,
   },
   signOutText: {
     fontSize: 16,
     fontWeight: '500',
     color: palette.destructive,
+  },
+  deleteAccountButton: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    marginBottom: 24,
+  },
+  deleteAccountText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: palette.textDim,
   },
 });

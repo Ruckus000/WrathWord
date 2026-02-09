@@ -53,6 +53,18 @@ interface DirectRpcResult<T> {
   error: Error | null;
 }
 
+export class DirectRpcError extends Error {
+  status?: number;
+  responseBody?: string;
+
+  constructor(message: string, status?: number, responseBody?: string) {
+    super(message);
+    this.name = 'DirectRpcError';
+    this.status = status;
+    this.responseBody = responseBody;
+  }
+}
+
 /**
  * Make a direct RPC call to PostgREST, bypassing Supabase JS client
  *
@@ -116,11 +128,41 @@ export async function directRpc<T>(
       logger.error(`[DirectRPC] ${functionName} error: ${response.status} - ${errorText}`);
       return {
         data: null,
-        error: new Error(`RPC error ${response.status}: ${errorText}`),
+        error: new DirectRpcError(
+          `RPC error ${response.status}: ${errorText}`,
+          response.status,
+          errorText,
+        ),
       };
     }
 
-    const data = await response.json();
+    // Void-returning RPCs can return 204 with no JSON body.
+    if (response.status === 204) {
+      logger.log(`[DirectRPC] ${functionName} returned no content (204)`);
+      return {data: null, error: null};
+    }
+
+    const responseText = await response.text();
+    if (!responseText.trim()) {
+      logger.log(`[DirectRPC] ${functionName} returned empty body`);
+      return {data: null, error: null};
+    }
+
+    let data: unknown;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      logger.error(`[DirectRPC] ${functionName} returned invalid JSON:`, parseError);
+      return {
+        data: null,
+        error: new DirectRpcError(
+          'RPC returned invalid JSON response',
+          response.status,
+          responseText,
+        ),
+      };
+    }
+
     logger.log(`[DirectRPC] ${functionName} returned ${Array.isArray(data) ? data.length + ' items' : 'data'}`);
     return {data: data as T, error: null};
   } catch (err) {
@@ -131,7 +173,7 @@ export async function directRpc<T>(
       logger.error(`[DirectRPC] ${functionName} timed out after ${duration}ms`);
       return {
         data: null,
-        error: new Error(`Request timed out after ${timeoutMs}ms`),
+        error: new DirectRpcError(`Request timed out after ${timeoutMs}ms`),
       };
     }
 

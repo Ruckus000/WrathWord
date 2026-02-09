@@ -200,8 +200,11 @@ describe('useHomeScreenData', () => {
       accessToken: mockAccessToken,
       loading: false,
       isAuthenticated: true,
+      isGuest: false,
       isDevelopmentMode: false,
       signOut: jest.fn(),
+      deleteAccount: jest.fn(),
+      enterGuestMode: jest.fn(),
     });
 
     mockUseUserStats.mockReturnValue(mockUserStats);
@@ -570,8 +573,11 @@ describe('useHomeScreenData', () => {
         accessToken: mockAccessToken,
         loading: false,
         isAuthenticated: true,
+        isGuest: false,
         isDevelopmentMode: false,
         signOut: jest.fn(),
+        deleteAccount: jest.fn(),
+        enterGuestMode: jest.fn(),
       });
 
       mockGetFriends.mockResolvedValue([]);
@@ -841,8 +847,11 @@ describe('useHomeScreenData', () => {
         accessToken: null,
         loading: false,
         isAuthenticated: false,
+        isGuest: false,
         isDevelopmentMode: false,
         signOut: jest.fn(),
+        deleteAccount: jest.fn(),
+        enterGuestMode: jest.fn(),
       });
 
       const {result} = renderHook(() => useHomeScreenData());

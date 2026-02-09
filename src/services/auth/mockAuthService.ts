@@ -143,6 +143,19 @@ class MockAuthService implements IAuthService {
       error: {message: 'Password reset not available in dev mode'},
     };
   }
+
+  async deleteAccount(accessToken?: string): Promise<AuthResult<void>> {
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Clear mock session
+    setJSON(MOCK_SESSION_KEY, null);
+
+    // Notify listeners
+    this.authStateCallbacks.forEach(cb => cb(null));
+
+    return {data: undefined, error: null};
+  }
 }
 
 export const mockAuthService = new MockAuthService();

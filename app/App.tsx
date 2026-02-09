@@ -14,7 +14,7 @@ import {NavigationProvider, useNavigation, useScreenParams} from '../src/present
 import {FEATURE_FLAGS} from '../src/config/featureFlags';
 
 function AppContent() {
-  const {isAuthenticated, loading, isDevelopmentMode} = useAuth();
+  const {isAuthenticated, loading, isDevelopmentMode, isGuest, enterGuestMode, signOut} = useAuth();
   const {
     currentScreen,
     navigateToGame,
@@ -41,8 +41,17 @@ function AppContent() {
     return null;
   }
 
-  // In production mode, show auth screens if not authenticated
-  if (!isDevelopmentMode && !isAuthenticated) {
+  // Check if user can access the app (authenticated, guest, or dev mode)
+  const canAccessApp = isDevelopmentMode || isAuthenticated || isGuest;
+
+  // Handle guest mode entry
+  const handleContinueAsGuest = () => {
+    enterGuestMode();
+    reset(FEATURE_FLAGS.HOME_SCREEN_ENABLED ? 'home' : 'game');
+  };
+
+  // In production mode, show auth screens if not authenticated and not guest
+  if (!canAccessApp) {
     if (currentScreen === 'signup') {
       return (
         <SignUpScreen
@@ -56,6 +65,7 @@ function AppContent() {
       <SignInScreen
         onSignInSuccess={() => reset(FEATURE_FLAGS.HOME_SCREEN_ENABLED ? 'home' : 'game')}
         onNavigateToSignUp={navigateToSignUp}
+        onContinueAsGuest={handleContinueAsGuest}
       />
     );
   }
@@ -81,6 +91,10 @@ function AppContent() {
       <FriendsScreen
         onBack={navigateToStats}
         onPlayNow={() => navigateToGame(null)}
+        onNavigateToSignIn={async () => {
+          await signOut();
+          navigateToSignIn();
+        }}
       />
     );
   }
@@ -91,6 +105,10 @@ function AppContent() {
       <StatsScreen
         onBack={() => FEATURE_FLAGS.HOME_SCREEN_ENABLED ? navigateToHome() : navigateToGame(null)}
         onNavigateToFriends={navigateToFriends}
+        onNavigateToSignIn={async () => {
+          await signOut();
+          navigateToSignIn();
+        }}
       />
     );
   }

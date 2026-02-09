@@ -22,7 +22,7 @@ export function HomeScreen({
   onNavigateToFriends,
 }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
-  const {user} = useAuth();
+  const {user, isGuest} = useAuth();
   const data = useHomeScreenData();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -65,8 +65,8 @@ export function HomeScreen({
     onFreePlay();
   }, [data.screenState, onFreePlay]);
 
-  // User initial for avatar
-  const userInitial = user?.displayName?.charAt(0) ?? 'W';
+  // User initial for avatar - show "G" for guests
+  const userInitial = isGuest ? 'G' : (user?.displayName?.charAt(0) ?? 'W');
 
   // Show skeleton while loading
   if (data.screenState === 'loading') {

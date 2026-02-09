@@ -4,6 +4,10 @@
 import {kv} from './mmkv';
 
 const USER_ID_KEY = 'currentUserId';
+const GUEST_MODE_KEY = 'isGuestMode';
+
+// Guest user ID for anonymous play
+export const GUEST_USER_ID = 'guest-user';
 
 let currentUserId: string | null = null;
 
@@ -55,4 +59,33 @@ export function getScopedKey(baseKey: string): string | null {
  */
 export function hasCurrentUser(): boolean {
   return getCurrentUserId() !== null;
+}
+
+/**
+ * Check if current user is a guest (not authenticated).
+ */
+export function isGuestUser(): boolean {
+  return getCurrentUserId() === GUEST_USER_ID;
+}
+
+/**
+ * Set guest user mode (for unauthenticated play).
+ */
+export function setGuestMode(): void {
+  setCurrentUserId(GUEST_USER_ID);
+  kv.set(GUEST_MODE_KEY, true);
+}
+
+/**
+ * Check if guest mode is enabled (persisted).
+ */
+export function isGuestModeEnabled(): boolean {
+  return kv.getBoolean(GUEST_MODE_KEY) === true;
+}
+
+/**
+ * Clear guest mode flag.
+ */
+export function clearGuestMode(): void {
+  kv.remove(GUEST_MODE_KEY);
 }

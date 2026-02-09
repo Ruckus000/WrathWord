@@ -14,6 +14,7 @@ import {
 } from './types';
 import {getFriendCode} from '../../storage/friendCode';
 import {logger} from '../../utils/logger';
+import {directRpc, DirectRpcError} from '../supabase/directRpc';
 
 class SupabaseAuthService implements IAuthService {
   private authStateCallbacks: Array<(session: AuthSession | null) => void> = [];
@@ -414,10 +415,122 @@ class SupabaseAuthService implements IAuthService {
       };
     }
   }
+
+  private isDeleteAccountAuthError(error: Error): boolean {
+    const message = error.message.toLowerCase();
+    const status = error instanceof DirectRpcError ? error.status : undefined;
+
+    return (
+      status === 401 ||
+      status === 403 ||
+      message.includes('not authenticated') ||
+      message.includes('jwt') ||
+      message.includes('permission denied')
+    );
+  }
+
+  private mapDeleteAccountError(error: Error): {message: string; code: string} {
+    const message = error.message;
+    const lowerMessage = message.toLowerCase();
+
+    if (lowerMessage.includes('timed out') || lowerMessage.includes('timeout')) {
+      return {message, code: 'TIMEOUT'};
+    }
+
+    if (this.isDeleteAccountAuthError(error)) {
+      return {message, code: 'NOT_AUTHENTICATED'};
+    }
+
+    return {message, code: 'RPC_ERROR'};
+  }
+
+  async deleteAccount(accessToken?: string): Promise<AuthResult<void>> {
+    // Get token if not provided (fallback for backward compatibility)
+    let token = accessToken;
+    if (!token) {
+      const session = await this.getSession();
+      token = session?.accessToken;
+    }
+
+    if (!token) {
+      return {
+        data: null,
+        error: {message: 'No access token available', code: 'NO_TOKEN'},
+      };
+    }
+
+    try {
+      logger.log('[Auth] Deleting account...');
+
+      const runDeleteRpc = async (rpcToken: string) =>
+        directRpc<void>({
+          functionName: 'delete_own_account',
+          params: {},
+          accessToken: rpcToken,
+          timeoutMs: 15000,
+        });
+
+      let {error} = await runDeleteRpc(token);
+
+      // If token is stale/invalid, refresh once and retry once.
+      if (error && this.isDeleteAccountAuthError(error)) {
+        logger.log('[Auth] Account deletion auth error, refreshing session and retrying once');
+        const supabase = getSupabase();
+
+        if (supabase) {
+          try {
+            const {
+              data: {session: refreshedSession},
+              error: refreshError,
+            } = await supabase.auth.refreshSession();
+
+            if (!refreshError && refreshedSession?.access_token) {
+              token = refreshedSession.access_token;
+              setCachedSession({
+                user: {id: refreshedSession.user.id},
+                access_token: refreshedSession.access_token,
+              });
+
+              ({error} = await runDeleteRpc(token));
+            } else {
+              logger.error('[Auth] Account deletion refresh failed:', refreshError);
+            }
+          } catch (refreshException) {
+            logger.error('[Auth] Account deletion refresh exception:', refreshException);
+          }
+        }
+      }
+
+      if (error) {
+        const mappedError = this.mapDeleteAccountError(error);
+        logger.error('[Auth] Account deletion failed:', error, mappedError);
+        return {
+          data: null,
+          error: mappedError,
+        };
+      }
+
+      // Clear cached session
+      setCachedSession(null);
+
+      // Notify listeners that session is gone
+      this.authStateCallbacks.forEach(cb => cb(null));
+
+      logger.log('[Auth] Account deleted successfully');
+      return {data: undefined, error: null};
+    } catch (err) {
+      logger.error('[Auth] deleteAccount exception:', err);
+      return {
+        data: null,
+        error: {
+          message: err instanceof Error ? err.message : 'Failed to delete account',
+        },
+      };
+    }
+  }
 }
 
 export const supabaseAuthService = new SupabaseAuthService();
-
 
 
 

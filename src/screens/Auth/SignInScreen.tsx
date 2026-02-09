@@ -26,6 +26,7 @@ import Svg, {Path} from 'react-native-svg';
 type Props = {
   onSignInSuccess: () => void;
   onNavigateToSignUp: () => void;
+  onContinueAsGuest?: () => void;
 };
 
 // Email validation regex
@@ -73,6 +74,7 @@ function AppleIcon() {
 export default function SignInScreen({
   onSignInSuccess,
   onNavigateToSignUp,
+  onContinueAsGuest,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
@@ -303,6 +305,16 @@ export default function SignInScreen({
             <Text style={styles.footerLink}>Sign Up</Text>
           </Pressable>
         </View>
+
+        {/* Guest Mode */}
+        {onContinueAsGuest && (
+          <Pressable
+            onPress={onContinueAsGuest}
+            style={styles.guestButton}
+            disabled={loading}>
+            <Text style={styles.guestButtonText}>Continue without account</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -458,6 +470,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: palette.accentTeal,
+  },
+  guestButton: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    marginTop: 16,
+  },
+  guestButtonText: {
+    fontSize: 14,
+    color: palette.textMuted,
   },
 });
 

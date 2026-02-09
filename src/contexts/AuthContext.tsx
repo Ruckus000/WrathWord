@@ -15,8 +15,15 @@ import React, {
 import {AppState, AppStateStatus} from 'react-native';
 import {authService, AuthSession, AuthUser} from '../services/auth';
 import {isDevelopment} from '../config/environment';
-import {setCurrentUserId, getScopedKey} from '../storage/userScope';
-import {getJSON} from '../storage/mmkv';
+import {
+  setCurrentUserId,
+  getScopedKey,
+  GUEST_USER_ID,
+  setGuestMode,
+  isGuestModeEnabled,
+  clearGuestMode,
+} from '../storage/userScope';
+import {getJSON, kv} from '../storage/mmkv';
 import {friendsService, getProfileService} from '../services/data';
 import {tutorialTrigger} from '../services/tutorialTrigger';
 import {getSupabase, setCachedSession} from '../services/supabase/client';
@@ -31,8 +38,11 @@ interface AuthContextValue {
   accessToken: string | null;
   loading: boolean;
   isAuthenticated: boolean;
+  isGuest: boolean;
   isDevelopmentMode: boolean;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<{success: boolean; error?: string; errorCode?: string}>;
+  enterGuestMode: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -52,6 +62,7 @@ interface AuthProviderProps {
 export function AuthProvider({children}: AuthProviderProps) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isGuest, setIsGuest] = useState(() => isGuestModeEnabled());
 
   // Update user-scoped storage when session changes
   useEffect(() => {
@@ -181,6 +192,12 @@ export function AuthProvider({children}: AuthProviderProps) {
     // Clear user-scoped storage (setCurrentUserId(null) is called in useEffect when session becomes null)
     setCurrentUserId(null);
 
+    // Clear guest mode if active
+    if (isGuest) {
+      clearGuestMode();
+      setIsGuest(false);
+    }
+
     // Sign out from auth service
     await authService.signOut();
 
@@ -190,14 +207,63 @@ export function AuthProvider({children}: AuthProviderProps) {
     logger.log('[AuthContext] Sign out complete');
   };
 
+  const handleDeleteAccount = async (): Promise<{success: boolean; error?: string; errorCode?: string}> => {
+    logger.log('[AuthContext] Deleting account - preserving token before deletion');
+
+    // Get access token BEFORE clearing session (critical to avoid JS client deadlock)
+    const accessToken = session?.accessToken;
+
+    if (!accessToken) {
+      return {success: false, error: 'No active session', errorCode: 'NO_TOKEN'};
+    }
+
+    try {
+      // Call auth service with preserved token
+      const result = await authService.deleteAccount(accessToken);
+
+      if (result.error) {
+        return {
+          success: false,
+          error: result.error.message,
+          errorCode: result.error.code,
+        };
+      }
+
+      // NOW clear session and storage AFTER successful deletion
+      setCachedSession(null);
+      setCurrentUserId(null);
+      kv.clearAll();
+      setSession(null);
+
+      logger.log('[AuthContext] Account deletion complete');
+      return {success: true};
+    } catch (err) {
+      logger.error('[AuthContext] Account deletion failed:', err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Failed to delete account',
+        errorCode: 'RPC_ERROR',
+      };
+    }
+  };
+
+  const enterGuestMode = () => {
+    logger.log('[AuthContext] Entering guest mode');
+    setGuestMode();
+    setIsGuest(true);
+  };
+
   const value: AuthContextValue = {
     session,
     user: session?.user || null,
     accessToken: session?.accessToken || null,
     loading,
     isAuthenticated: session !== null,
+    isGuest,
     isDevelopmentMode: isDevelopment,
     signOut: handleSignOut,
+    deleteAccount: handleDeleteAccount,
+    enterGuestMode,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

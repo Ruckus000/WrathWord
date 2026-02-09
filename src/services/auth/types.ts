@@ -71,6 +71,12 @@ export interface IAuthService {
    * Send a password reset email
    */
   resetPassword(email: string): Promise<AuthResult<{message: string}>>;
+
+  /**
+   * Permanently delete the current user's account and all associated data
+   * @param accessToken - Optional access token to use for the deletion request
+   */
+  deleteAccount(accessToken?: string): Promise<AuthResult<void>>;
 }
 
 

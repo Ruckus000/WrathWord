@@ -45,11 +45,12 @@ import LegalDocumentScreen from './LegalDocumentScreen';
 type Props = {
   onBack: () => void;
   onNavigateToFriends?: () => void;
+  onNavigateToSignIn?: () => void;
 };
 
-export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
+export default function StatsScreen({onBack, onNavigateToFriends, onNavigateToSignIn}: Props) {
   const insets = useSafeAreaInsets();
-  const {isAuthenticated, isDevelopmentMode, user, signOut} = useAuth();
+  const {isAuthenticated, isDevelopmentMode, isGuest, user, signOut} = useAuth();
   const profile = getProfile();
 
   const [selectedLength, setSelectedLength] = useState(
@@ -285,7 +286,27 @@ export default function StatsScreen({onBack, onNavigateToFriends}: Props) {
         {/* Account Section */}
         <Text style={styles.sectionTitle}>Account</Text>
         <View style={styles.settingsGroup}>
-          {!isAuthenticated && !isDevelopmentMode ? (
+          {isGuest ? (
+            <>
+              <SettingsRow
+                icon={<UserIcon size={18} />}
+                iconBg={palette.textDim}
+                label="Guest Mode"
+                subtitle="Stats saved locally only"
+              />
+              <SettingsRow
+                icon={<UserIcon size={18} />}
+                iconBg={palette.accentTeal}
+                label="Create Account"
+                subtitle="Sync progress and compete"
+                onPress={async () => {
+                  await signOut();
+                  onNavigateToSignIn?.();
+                }}
+                isLast
+              />
+            </>
+          ) : !isAuthenticated && !isDevelopmentMode ? (
             <SettingsRow
               icon={<UserIcon size={18} />}
               iconBg={palette.primary}

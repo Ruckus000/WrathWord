@@ -23,11 +23,13 @@ import AddFriendsModal from './AddFriendsModal';
 type Props = {
   onBack: () => void;
   onPlayNow?: () => void;
+  onNavigateToSignIn?: () => void;
 };
 
 export default function FriendsScreen({
   onBack,
   onPlayNow,
+  onNavigateToSignIn,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('today');
@@ -40,8 +42,39 @@ export default function FriendsScreen({
   const [error, setError] = useState<string | null>(null);
 
   // Get user from auth context - this avoids calling getSession which can hang
-  const {user, accessToken} = useAuth();
+  const {user, accessToken, isGuest, isAuthenticated} = useAuth();
   const userId = user?.id;
+
+  // Guest users cannot access friends/leaderboards
+  if (isGuest || !isAuthenticated) {
+    return (
+      <View
+        style={[
+          styles.container,
+          {paddingTop: insets.top, paddingBottom: insets.bottom},
+        ]}>
+        <View style={styles.header}>
+          <Pressable style={styles.backBtn} onPress={onBack}>
+            <ChevronLeft size={22} color={palette.primary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Compete</Text>
+          <View style={styles.addBtn} />
+        </View>
+        <View style={styles.authRequired}>
+          <Text style={styles.authRequiredTitle}>Sign In Required</Text>
+          <Text style={styles.authRequiredText}>
+            Create an account to compete with friends, view leaderboards, and
+            track your progress across devices.
+          </Text>
+          {onNavigateToSignIn && (
+            <Pressable style={styles.signInButton} onPress={onNavigateToSignIn}>
+              <Text style={styles.signInButtonText}>Sign In or Sign Up</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    );
+  }
 
   // Get actual user data from hooks
   const userTodayResult = useUserTodayResult();
@@ -265,6 +298,36 @@ const styles = StyleSheet.create({
   },
   retryButtonText: {
     fontSize: 15,
+    fontWeight: '600',
+    color: palette.textPrimary,
+  },
+  authRequired: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  authRequiredTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: palette.textPrimary,
+    marginBottom: 12,
+  },
+  authRequiredText: {
+    fontSize: 15,
+    color: palette.textMuted,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  signInButton: {
+    backgroundColor: palette.primary,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  signInButtonText: {
+    fontSize: 16,
     fontWeight: '600',
     color: palette.textPrimary,
   },
